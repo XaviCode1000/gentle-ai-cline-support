@@ -53,6 +53,8 @@ func (profileResolver) ResolveAgentInstall(profile system.PlatformProfile, agent
 		return resolveOpenCodeInstall(profile)
 	case model.AgentKilocode:
 		return resolveKilocodeInstall(profile), nil
+	case model.AgentCline:
+		return resolveClineInstall(profile), nil
 	case model.AgentKimi:
 		return resolveKimiInstall(profile)
 	default:
@@ -92,6 +94,17 @@ func resolveKilocodeInstall(profile system.PlatformProfile) CommandSequence {
 	return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}
 }
 
+// resolveClineInstall returns the npm install command sequence gentle-ai
+// shows for Cline — display text only, never executed by gentle-ai.
+// --ignore-scripts matches the Claude Code / Kilocode posture.
+func resolveClineInstall(profile system.PlatformProfile) CommandSequence {
+	const pkg = "cline@latest"
+	if profile.OS == "linux" && !profile.NpmWritable {
+		return CommandSequence{{"sudo", "npm", "install", "-g", "--ignore-scripts", pkg}}
+	}
+	return CommandSequence{{"npm", "install", "-g", "--ignore-scripts", pkg}}
+}
+
 // resolveKimiInstall returns the official Kimi install command sequence.
 // To avoid the security risks of pipe-to-shell patterns (curl | bash),
 // we execute the underlying command that the scripts alias: `uv tool install`.
@@ -121,6 +134,7 @@ var npmBasedAgents = map[model.AgentID]struct{}{
 	model.AgentCodex:      {},
 	model.AgentQwenCode:   {},
 	model.AgentPi:         {},
+	model.AgentCline:      {},
 }
 
 // ValidateAgentInstallPreflight validates agent-specific prerequisites that must

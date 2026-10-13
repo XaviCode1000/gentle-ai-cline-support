@@ -5,6 +5,7 @@ import (
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravity"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/claude"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/cline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/conductor"
 	cursoradapter "github.com/gentleman-programming/gentle-ai/v4/internal/agents/cursor"
@@ -41,6 +42,7 @@ var defaultAgentIDs = []model.AgentID{
 	model.AgentTrae,
 	model.AgentHermes,
 	model.AgentConductor,
+	model.AgentCline,
 }
 
 func NewAdapter(agent model.AgentID) (Adapter, error) {
@@ -79,6 +81,8 @@ func NewAdapter(agent model.AgentID) (Adapter, error) {
 		return hermes.NewAdapter(), nil
 	case model.AgentConductor:
 		return conductor.NewAdapter(), nil
+	case model.AgentCline:
+		return cline.NewAdapter(), nil
 	default:
 		return nil, AgentNotSupportedError{Agent: agent}
 	}

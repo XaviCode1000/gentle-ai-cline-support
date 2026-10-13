@@ -113,3 +113,4 @@ Restart OpenCode after enabling managed activation. Start a new login shell so t
 | Trae | `%USERPROFILE%\.trae\` (skills) + `%APPDATA%\Trae\User\user_rules.md` (rules) + `%APPDATA%\Trae\User\mcp.json` (MCP) |
 | Pi | `%USERPROFILE%\.pi\` (Pi config, project agents/chains, Gentle AI support assets) |
 | Hermes | `%USERPROFILE%\.hermes\` (config.yaml, SOUL.md, skills/) |
+| Cline | `%USERPROFILE%\.cline\` (rules/, skills/, agents/, `data\settings\cline_mcp_settings.json`, `data\settings\global-settings.json`) |

@@ -71,6 +71,7 @@ func TestDefaultRegistrySupportedAgentsMatchesFactoryAgents(t *testing.T) {
 	want := []model.AgentID{
 		model.AgentAntigravity,
 		model.AgentClaudeCode,
+		model.AgentCline,
 		model.AgentCodex,
 		model.AgentConductor,
 		model.AgentCursor,

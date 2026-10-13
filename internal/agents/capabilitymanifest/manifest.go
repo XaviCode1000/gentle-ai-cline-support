@@ -319,6 +319,9 @@ var featureClaimsByAgent = map[model.AgentID]AgentFeatureClaims{
 		OutputStyles: true, SlashCommands: true,
 		FileSubAgents: true, Skills: true, SystemPrompt: true, MCP: true,
 	},
+	model.AgentCline: {
+		FileSubAgents: true, Skills: true, SystemPrompt: true, MCP: true,
+	},
 	model.AgentCodex: {
 		Skills: true, SystemPrompt: true, MCP: true,
 	},

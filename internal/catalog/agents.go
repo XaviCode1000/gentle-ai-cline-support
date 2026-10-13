@@ -37,6 +37,7 @@ var allAgents = []Agent{
 	// sets that expectation before the user confirms the install.
 	{ID: model.AgentConductor, Name: "Conductor", Tier: model.TierFull, ConfigPath: "~/.conductor",
 		ReviewNote: "Conductor workspaces inherit Claude Code configuration; Gentle AI writes no Conductor-specific files."},
+	{ID: model.AgentCline, Name: "Cline", Tier: model.TierFull, ConfigPath: "~/.cline"},
 }
 
 // mvpAgents are the original MVP agents (Claude Code, OpenCode).

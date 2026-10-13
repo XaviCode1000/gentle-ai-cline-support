@@ -43,7 +43,7 @@ func TestODDOnlyEmbeddedInventory(t *testing.T) {
 	if len(orchestrators) == 0 {
 		t.Fatal("embedded inventory has no retained orchestrator assets")
 	}
-	for _, runtime := range []string{"claude", "opencode", "gemini", "antigravity", "codex", "cursor", "kiro", "kimi", "hermes", "generic", "qwen", "windsurf"} {
+	for _, runtime := range []string{"claude", "cline", "opencode", "gemini", "antigravity", "codex", "cursor", "kiro", "kimi", "hermes", "generic", "qwen", "windsurf"} {
 		if !orchestrators[runtime] {
 			t.Errorf("%s lost its ODD/RDD orchestrator asset", runtime)
 		}
@@ -228,7 +228,7 @@ func TestPrimaryODDOnlyOrchestrator(t *testing.T) {
 // TestRemainingODDOnlyOrchestrators covers mixed prompts retained for migration.
 // Their RDD, language, and delegation contracts must survive SDD removal.
 func TestRemainingODDOnlyOrchestrators(t *testing.T) {
-	for _, runtime := range []string{"antigravity", "cursor", "gemini", "hermes", "kimi", "kiro", "qwen", "windsurf"} {
+	for _, runtime := range []string{"antigravity", "cline", "cursor", "gemini", "hermes", "kimi", "kiro", "qwen", "windsurf"} {
 		t.Run(runtime, func(t *testing.T) {
 			content := MustRead(runtime + "/orchestrator.md")
 			for _, required := range []string{
@@ -567,7 +567,7 @@ func allODDOrchestratorAssetPaths(t *testing.T) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, runtime := range []string{"antigravity", "claude", "codex", "cursor", "gemini", "generic", "hermes", "kimi", "kiro", "opencode", "qwen", "windsurf"} {
+	for _, runtime := range []string{"antigravity", "claude", "cline", "codex", "cursor", "gemini", "generic", "hermes", "kimi", "kiro", "opencode", "qwen", "windsurf"} {
 		path := runtime + "/orchestrator.md"
 		if !slices.Contains(paths, path) {
 			t.Errorf("missing retained ODD orchestrator %s", path)

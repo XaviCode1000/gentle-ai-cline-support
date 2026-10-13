@@ -211,6 +211,7 @@ func TestEveryManifestKeepsWorkRoutingDormantAndHashesCanonically(t *testing.T) 
 	wantManifestDigests := map[model.AgentID]string{
 		model.AgentAntigravity:   "sha256:4666df6712fc63b0aacf1227cb28d0afdace1f98cbdd611aa2d5e8d4048b87ce",
 		model.AgentClaudeCode:    "sha256:0644de1b6539cffee24ed3d673b450bf1f460fe5db7e8f05c5a0911aace8b280",
+		model.AgentCline:         "sha256:d1a1a4a2c5fda74400233ed844ddf0383e2cf79eeb6f4e773ace64cd83222de8",
 		model.AgentCodex:         "sha256:b47855dc0acdae65aa2215eba09135087d32a890814dc73baab13595ecb6602b",
 		model.AgentConductor:     "sha256:f06b2f6250b4fe2795a4f3c5dba242f4d19933ba2601311f1e8ed1b9fc95e48f",
 		model.AgentCursor:        "sha256:acb6f0092917d40ee12ca88b2661f623f317f0c7436b8b4205fccabf6dd9a9ca",
@@ -305,6 +306,7 @@ func TestEveryManifestDigestStaysByteStable(t *testing.T) {
 	wantNonPiDigests := map[model.AgentID]string{
 		model.AgentAntigravity:   "sha256:4666df6712fc63b0aacf1227cb28d0afdace1f98cbdd611aa2d5e8d4048b87ce",
 		model.AgentClaudeCode:    "sha256:0644de1b6539cffee24ed3d673b450bf1f460fe5db7e8f05c5a0911aace8b280",
+		model.AgentCline:         "sha256:d1a1a4a2c5fda74400233ed844ddf0383e2cf79eeb6f4e773ace64cd83222de8",
 		model.AgentCodex:         "sha256:b47855dc0acdae65aa2215eba09135087d32a890814dc73baab13595ecb6602b",
 		model.AgentConductor:     "sha256:f06b2f6250b4fe2795a4f3c5dba242f4d19933ba2601311f1e8ed1b9fc95e48f",
 		model.AgentCursor:        "sha256:acb6f0092917d40ee12ca88b2661f623f317f0c7436b8b4205fccabf6dd9a9ca",
@@ -326,8 +328,8 @@ func TestEveryManifestDigestStaysByteStable(t *testing.T) {
 		nonPiAgents = append(nonPiAgents, agent)
 	}
 
-	if got := len(nonPiAgents); got != 16 {
-		t.Fatalf("want 16 non-Pi agents, got %d", got)
+	if got := len(nonPiAgents); got != 17 {
+		t.Fatalf("want 17 non-Pi agents, got %d", got)
 	}
 
 	for _, agent := range nonPiAgents {

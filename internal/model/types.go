@@ -71,6 +71,7 @@ const (
 	AgentPi            AgentID = "pi"
 	AgentTrae          AgentID = "trae-ide"
 	AgentHermes        AgentID = "hermes"
+	AgentCline         AgentID = "cline"
 	AgentConductor     AgentID = "conductor"
 )
 
