@@ -20,8 +20,8 @@ delegation is expressed on this runtime; they never replace ODD routing.
 - Subagents spawned with `spawn_agent` run in a separate context window with
   the mode's built-in tools only. They do not receive MCP servers (Engram,
   Context7, CodeGraph): any memory write or external lookup they need must
-  run in the lead, or the subagent must return its result payload for the
-  lead to persist.
+  run in the lead, or the subagent must return its result payload, including
+  any Key Learnings, for the lead to persist.
 - Keep parallel subagent batches small and focused; every subagent shares the
   session budget. Never nest subagents unless a single level cannot express
   the work.
@@ -39,6 +39,9 @@ delegation is expressed on this runtime; they never replace ODD routing.
   teamwork. Team mode keeps a task board across sessions but caps concurrent
   runs at two, gives teammates no MCP tools, resumes under a fragile
   session-or-team key, and stays off in yolo mode.
+- Implementation delegates get no surfaces mechanism: inline the exact file
+  paths, scope, and acceptance criteria in the delegation text, one level
+  only, and expect observed outcomes back, never summaries.
 
 ### Organic Driven Development Is The Default Workflow (MANDATORY)
 
