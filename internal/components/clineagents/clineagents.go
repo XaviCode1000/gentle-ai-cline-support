@@ -9,6 +9,8 @@
 package clineagents
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"os"
@@ -46,6 +48,47 @@ func FileNames(agent model.AgentID) []string {
 	return append([]string(nil), managedAgents...)
 }
 
+// retiredAgents maps retired configured-agent filenames to the SHA-256 hex
+// digests of every byte variant Gentle AI ever shipped for them. Install
+// removes a retired file only when its bytes match a known shipped variant;
+// anything else (including a user's own agent under the same name) is left
+// untouched.
+var retiredAgents = map[string][]string{
+	"review-readability.yaml": {"fb54aa6a97c6e803d2aa0c5350423197750ff189e64835acd702638231cb28a6", "a4c3c8573ee196a2c26f4d014e3bfdd2f57dbad4f6866926bbb3c1085d8d5081"},
+	"review-refuter.yaml":     {"cefb908bfb55ceaa70ca810b68ed7d28c1496bff8bf87725d5e5ade7cc1bce3e", "cb45985f5bf3fa51c16e1ebbbe566c09ac777ba204586d1e47ae59a8ac21eb92"},
+	"review-reliability.yaml": {"6114073a44be9aed13566c790d405e6d3744b35adc970d23d15f7bee7787f721", "a701a1129b1d5eedec90118349de79e5334283890a88705661e79228d26aff3c"},
+	"review-resilience.yaml":  {"56ee2ef77bf9c04f95c139c311924a1a6fb3c1354a4290ce49726b7aa39b7550", "b701d97deb296d19cc6129523dd043571aeeb8436bc029602c671df432d9bb4a"},
+	"review-risk.yaml":        {"a5466a0212fd8bc82543854e871e38aec8d4efb6c584c9e48e68ec9f4c772b71", "2866bac1ccb69ab9152850e12d8045d8173eb3ad74515cd98c8ddd104c82716d"},
+}
+
+// RetiredFileNames lists retired configured-agent filenames for the runtime,
+// so backup and verification contracts snapshot exactly what the installer
+// may remove.
+func RetiredFileNames(agent model.AgentID) []string {
+	if !AgentSupported(agent) {
+		return nil
+	}
+	names := make([]string, 0, len(retiredAgents))
+	for name := range retiredAgents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// ownsRetiredFile reports whether data matches a byte variant Gentle AI
+// shipped for the retired filename.
+func ownsRetiredFile(name string, data []byte) bool {
+	sum := sha256.Sum256(data)
+	got := hex.EncodeToString(sum[:])
+	for _, want := range retiredAgents[name] {
+		if got == want {
+			return true
+		}
+	}
+	return false
+}
+
 type InstallResult struct {
 	Changed bool
 	Files   []string
@@ -70,6 +113,29 @@ func Install(home string, adapter agents.Adapter) (InstallResult, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return InstallResult{}, fmt.Errorf("create cline agents directory: %w", err)
 	}
+	var result InstallResult
+
+	// Retire previously shipped agents first: a renamed managed set must
+	// not leave stale tools behind. Only Gentle AI-owned bytes are
+	// removed; user files under the same name are preserved.
+	for _, name := range RetiredFileNames(adapter.Agent()) {
+		path := filepath.Join(dir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return result, fmt.Errorf("inspect retired cline agent %s: %w", name, err)
+		}
+		if !ownsRetiredFile(name, data) {
+			continue
+		}
+		if err := os.Remove(path); err != nil {
+			return result, fmt.Errorf("remove retired cline agent %s: %w", name, err)
+		}
+		result.Changed = true
+		result.Files = append(result.Files, path)
+	}
 	// Read every input before touching the target so a missing embedded
 	// asset never leaves a partial install behind.
 	desired := make(map[string]string, len(managedAgents))
@@ -80,7 +146,6 @@ func Install(home string, adapter agents.Adapter) (InstallResult, error) {
 		}
 		desired[name] = content
 	}
-	var result InstallResult
 	names := append([]string(nil), managedAgents...)
 	sort.Strings(names)
 	for _, name := range names {

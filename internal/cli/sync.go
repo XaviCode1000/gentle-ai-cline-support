@@ -841,6 +841,13 @@ func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, s
 				paths[filepath.Join(dir, name)] = struct{}{}
 			}
 		}
+		// Retired names are listed too: the installer may remove owned ones.
+		if names := clineagents.RetiredFileNames(adapter.Agent()); len(names) > 0 {
+			dir := adapter.SubAgentsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
+			for _, name := range names {
+				paths[filepath.Join(dir, name)] = struct{}{}
+			}
+		}
 		if adapter.Agent() == model.AgentPi {
 			paths[adapter.SystemPromptFile(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))] = struct{}{}
 		}

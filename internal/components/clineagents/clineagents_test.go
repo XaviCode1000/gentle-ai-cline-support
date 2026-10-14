@@ -1,6 +1,8 @@
 package clineagents
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -110,6 +112,66 @@ func TestEmbeddedAgentYAMLContracts(t *testing.T) {
 			if strings.Contains(strings.ToLower(content), banned) {
 				t.Fatalf("%s: banned %q present", name, banned)
 			}
+		}
+	}
+}
+
+func TestRetiredOwnedRemovedForeignPreserved(t *testing.T) {
+	adapter := cline.NewAdapter()
+	home := t.TempDir()
+	// A user-owned file under a retired name must survive install.
+	foreign := []byte("---\nname: review-risk\ndescription: mine\ntools: []\n---\n\nhello\n")
+	foreignPath := filepath.Join(adapter.SubAgentsDir(home), "review-risk.yaml")
+	if err := os.MkdirAll(adapter.SubAgentsDir(home), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(foreignPath, foreign, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A genuine previously shipped variant must be retired. Rebuild its
+	// exact bytes from the embedded upstream source plus the documented
+	// transform both shipped variants applied.
+	raw, err := assets.Read("claude/agents/review-reliability.md")
+	if err != nil {
+		t.Fatalf("read upstream lens: %v", err)
+	}
+	raw = strings.Replace(raw, "model: {{CLAUDE_MODEL}}\n", "", 1)
+	raw = strings.Replace(raw, "{{CLAUDE_EFFORT_FRONTMATTER}}\n", "", 1)
+	raw = strings.Replace(raw, "tools: []", "tools: [read_files]", 1)
+	// Rebuild the exact shipped bytes the lensfix transform produced:
+	// frontmatter (drops + tools), invocation note, body. The hash
+	// assertion below pins this reconstruction to a known shipped variant;
+	// a mismatch fails loudly instead of silently weakening the test.
+	parts := strings.SplitN(raw, "---\n", 3)
+	if len(parts) != 3 || parts[0] != "" {
+		t.Fatal("unexpected frontmatter shape")
+	}
+	note := "> Cline note: the Cline lead invokes you with the review target pasted in the\n> task text, or with a file path for you to read yourself with read_files.\n> That supplied-or-read target is your entire scope: never edit, execute,\n> delegate, or fetch anything else.\n\n"
+	raw = "---\n" + parts[1] + "---\n" + note + parts[2]
+	sum := sha256.Sum256([]byte(raw))
+	if got, want := hex.EncodeToString(sum[:]), "a701a1129b1d5eedec90118349de79e5334283890a88705661e79228d26aff3c"; got != want {
+		t.Fatalf("reconstruction hash = %s, want shipped variant %s", got, want)
+	}
+	ownedPath := filepath.Join(adapter.SubAgentsDir(home), "review-reliability.yaml")
+	if err := os.WriteFile(ownedPath, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Install(home, adapter)
+	if err != nil {
+		t.Fatalf("Install error = %v", err)
+	}
+	if !res.Changed {
+		t.Fatal("Install reported no change, want managed writes plus one retirement")
+	}
+	if _, err := os.Stat(foreignPath); err != nil {
+		t.Fatalf("user-owned retired-name file was removed: %v", err)
+	}
+	if _, err := os.Stat(ownedPath); !os.IsNotExist(err) {
+		t.Fatalf("owned retired file still present")
+	}
+	for _, name := range FileNames(model.AgentCline) {
+		if _, err := os.Stat(filepath.Join(adapter.SubAgentsDir(home), name)); err != nil {
+			t.Fatalf("managed file %s missing: %v", name, err)
 		}
 	}
 }
