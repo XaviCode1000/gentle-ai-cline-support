@@ -2,11 +2,10 @@
 // for Cline into the runtime's subagents directory.
 //
 // These agents are NOT part of receipt-driven development: Cline has no
-// provider subprocess harness, so the Cline lead invokes them with pasted
-// binding plus context, and they return payloads. The review lenses carry
-// no tools at all (Cline subagents never receive MCP servers anyway),
-// exactly like their upstream provider-harness counterparts, which run
-// without execution tools against provider-injected immutable context.
+// provider subprocess harness, so the Cline lead invokes them with the
+// task identity, specs, and target, and they return verdicts. The verifier
+// agents carry only read_files (Cline subagents never receive MCP servers
+// anyway) and never edit, execute, or delegate.
 package clineagents
 
 import (
@@ -26,11 +25,11 @@ import (
 // Gentle AI installs for Cline. Keep the embedded directory, install,
 // backup, and upgrade inventory derived from it.
 var managedAgents = []string{
-	"review-readability.yaml",
-	"review-refuter.yaml",
-	"review-reliability.yaml",
-	"review-resilience.yaml",
-	"review-risk.yaml",
+	"challenge-assumption.yaml",
+	"verify-clarity.yaml",
+	"verify-reliability.yaml",
+	"verify-resilience.yaml",
+	"verify-security.yaml",
 }
 
 // AgentSupported reports whether Gentle AI installs configured agents for

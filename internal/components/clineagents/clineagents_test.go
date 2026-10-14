@@ -103,10 +103,10 @@ func TestEmbeddedAgentYAMLContracts(t *testing.T) {
 		if fields["tools"] != "[read_files]" {
 			t.Fatalf("%s: tools = %q, want read-only [read_files] (reviewers run without execution tools)", name, fields["tools"])
 		}
-		if !strings.Contains(body, "BLOCKER") {
-			t.Fatalf("%s: body lost the shared severity vocabulary", name)
+		if !strings.Contains(body, "One pass only") {
+			t.Fatalf("%s: body lost the single-pass bound", name)
 		}
-		for _, banned := range []string{"{{", "sdd", "openspec", "claude", "askuserquestion"} {
+		for _, banned := range []string{"{{", "sdd", "openspec", "claude", "kiro", "askuserquestion", "frozen", "ledger", "refuter", "receipt", "RDD", "RAR", "native review", "review-integration", "judgment-day", "No findings."} {
 			if strings.Contains(strings.ToLower(content), banned) {
 				t.Fatalf("%s: banned %q present", name, banned)
 			}
