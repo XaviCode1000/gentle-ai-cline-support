@@ -26,7 +26,7 @@ Gentle AI configures agents you already have; it does not install an AI agent fo
 | <a id="pi"></a>Pi | `pi` | Package-owned runtime through Gentle Shell; see [Pi](pi.md) |
 | <a id="hermes"></a>Hermes | `hermes` | Ephemeral `delegate_task` workers, skills and MCP |
 | <a id="conductor"></a>Conductor | `conductor` | Workspace orchestrator that inherits Claude Code configuration; detection and catalog only — no managed writes |
-| <a id="cline"></a>Cline | `cline` | Lead-invoked configured review agents, merged global rules, on-demand skills and MCP; MCP stays lead-owned (subagents receive none) and children inherit the lead model |
+| <a id="cline"></a>Cline | `cline` | Lead-invoked configured review agents, merged global rules, on-demand skills and MCP; MCP stays lead-owned (subagents receive none) and children inherit the lead model; team mode only for explicitly requested persistent multi-session work (2 concurrent runs, no MCP in teammates, fragile resume) |
 
 ## Agent guidance and ownership
 

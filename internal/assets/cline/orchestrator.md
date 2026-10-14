@@ -34,6 +34,11 @@ delegation is expressed on this runtime; they never replace ODD routing.
   rules.
 - Managed skills live in `~/.cline/skills/` and load on demand; the lead
   resolves skill paths once and passes them explicitly.
+- Prefer `spawn_agent` and `subagent_*` configured agents for delegation; use
+  team mode only when the user explicitly asks for persistent multi-session
+  teamwork. Team mode keeps a task board across sessions but caps concurrent
+  runs at two, gives teammates no MCP tools, resumes under a fragile
+  session-or-team key, and stays off in yolo mode.
 
 ### Organic Driven Development Is The Default Workflow (MANDATORY)
 
