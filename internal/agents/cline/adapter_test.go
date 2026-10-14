@@ -108,8 +108,8 @@ func TestConfigPaths(t *testing.T) {
 	if got := a.SubAgentsDir(home); got != filepath.Join(home, ".cline", "agents") {
 		t.Fatalf("SubAgentsDir() = %q", got)
 	}
-	if got := a.EmbeddedSubAgentsDir(); got != "" {
-		t.Fatalf("EmbeddedSubAgentsDir() = %q, want empty (no shipped projection yet)", got)
+	if got := a.EmbeddedSubAgentsDir(); got != "cline/agents" {
+		t.Fatalf("EmbeddedSubAgentsDir() = %q, want cline/agents", got)
 	}
 }
 

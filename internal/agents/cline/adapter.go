@@ -177,11 +177,13 @@ func (a *Adapter) SubAgentsDir(homeDir string) string {
 	return filepath.Join(a.GlobalConfigDir(homeDir), "agents")
 }
 
-// EmbeddedSubAgentsDir is empty: this migration ships no file-based
-// subagent projection yet. SubAgentsDir still reports ~/.cline/agents so
-// uninstall, upgrade inventory, and backup contracts resolve the runtime
-// path; review-lens parity for Cline is a follow-up.
-func (a *Adapter) EmbeddedSubAgentsDir() string { return "" }
+// EmbeddedSubAgentsDir returns the canonical Cline configured-agent
+// definitions (review lenses). The clineagents projection copies these
+// files verbatim, so they are authored directly in Cline's schema:
+// frontmatter {name, description, tools} followed by the reviewer prompt
+// as the document body. Keep clineagents.FileNames as the source of
+// truth for the set.
+func (a *Adapter) EmbeddedSubAgentsDir() string { return "cline/agents" }
 func (a *Adapter) SupportsSkills() bool {
 	return a.CapabilityManifest().Features.Skills
 }

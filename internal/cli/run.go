@@ -29,6 +29,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agentguidance"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agenthooks"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/components/clineagents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/communitytool"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/engram"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
@@ -979,6 +980,11 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 			apply = append(apply, nativeReviewAgentStep{id: "agent:native-review:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, state: r.state})
 		}
 	}
+	for _, agent := range r.resolved.Agents {
+		if clineagents.AgentSupported(agent) {
+			apply = append(apply, clineConfiguredAgentsStep{id: "agent:cline-agents:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, state: r.state})
+		}
+	}
 	apply = append(apply, retiredSDDAssetStepList(retiredSDDAssetSteps("agent:retire-sdd-assets:", r.homeDir, r.workspaceDir, r.scope, r.resolved.Agents, nil, r.state))...)
 	// After the native installer: it rewrites a Gentle-owned v3 Kimi
 	// gentleman.yaml, so the SDD subagents it declared can be retired now.
@@ -1068,6 +1074,34 @@ func (s nativeReviewAgentStep) Run() error {
 		for _, path := range res.Skipped {
 			s.state.nativeReviewActions = append(s.state.nativeReviewActions, nativeReviewPreservedAction(path))
 		}
+	}
+	return nil
+}
+
+// clineConfiguredAgentsStep installs Gentle AI's lead-invoked configured
+// agents (review lenses) for Cline. It is keyed by agent, like
+// nativeReviewAgentStep, because configured-agent projection is per-agent
+// rather than per-component.
+type clineConfiguredAgentsStep struct {
+	id, homeDir, workspaceDir string
+	agent                     model.AgentID
+	scope                     InstallScope
+	selection                 model.Selection
+	changedFiles              *[]string
+	state                     *runtimeState
+}
+
+func (s clineConfiguredAgentsStep) ID() string { return s.id }
+
+func (s clineConfiguredAgentsStep) Run() error {
+	adapter := resolveAdapters([]model.AgentID{s.agent})[0]
+	target := componentInjectionDirScoped(s.homeDir, s.workspaceDir, s.scope, adapter)
+	res, err := clineagents.Install(target, adapter)
+	if err != nil {
+		return fmt.Errorf("install cline configured agents for %q: %w", s.agent, err)
+	}
+	if s.changedFiles != nil {
+		*s.changedFiles = append(*s.changedFiles, res.Files...)
 	}
 	return nil
 }
@@ -3919,6 +3953,14 @@ func installBackupTargets(homeDir, workspaceDir string, scope InstallScope, sele
 		if names := reviewassets.NativeAgentFileNames(adapter.Agent()); len(names) > 0 {
 			dir := adapter.SubAgentsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
 			paths[filepath.Join(dir, reviewassets.OwnershipLedgerFilename)] = struct{}{}
+			for _, name := range names {
+				paths[filepath.Join(dir, name)] = struct{}{}
+			}
+		}
+		// Cline lead-invoked configured agents are installed independently of
+		// components; snapshot exactly what the installer writes.
+		if names := clineagents.FileNames(adapter.Agent()); len(names) > 0 {
+			dir := adapter.SubAgentsDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter))
 			for _, name := range names {
 				paths[filepath.Join(dir, name)] = struct{}{}
 			}

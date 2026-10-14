@@ -26,13 +26,13 @@ Gentle AI configures agents you already have; it does not install an AI agent fo
 | <a id="pi"></a>Pi | `pi` | Package-owned runtime through Gentle Shell; see [Pi](pi.md) |
 | <a id="hermes"></a>Hermes | `hermes` | Ephemeral `delegate_task` workers, skills and MCP |
 | <a id="conductor"></a>Conductor | `conductor` | Workspace orchestrator that inherits Claude Code configuration; detection and catalog only — no managed writes |
-| <a id="cline"></a>Cline | `cline` | Configured agents, rules, skills and MCP |
+| <a id="cline"></a>Cline | `cline` | Lead-invoked configured review agents, merged global rules, on-demand skills and MCP; MCP stays lead-owned (subagents receive none) and children inherit the lead model |
 
 ## Agent guidance and ownership
 
 Gentle AI installs or refreshes managed guidance, skills, and supported review agents for selected clients. It does not own Pi's runtime prompts or child-agent lifecycle: the separately installed Gentle Shell (`gentle-pi`) package does. Installing a single agent merges it into the recorded installed-agent selection; sync normally refreshes only that selection. `gentle-ai install --scope=workspace` places supported agent-scoped files in the project instead of the global agent configuration, while global-only settings remain global.
 
-Delegated work stays focused: the parent supplies task context and exact relevant skill paths, then checks the outcome. A client without native delegation can perform smaller work inline; native availability does not grant permission for extra writes. Hermes workers require explicit mission context, tools and skills rather than assuming inheritance. Codex multi-agent execution depends on native tools and configuration. Review agents are separate from ordinary ODD implementation agents; RDD runs only under the user-owned switch and candidate consent when applicable.
+Delegated work stays focused: the parent supplies task context and exact relevant skill paths, then checks the outcome. A client without native delegation can perform smaller work inline; native availability does not grant permission for extra writes. Hermes workers require explicit mission context, tools and skills rather than assuming inheritance. Cline subagents receive no MCP tools, so memory writes stay lead-owned and children return payloads. Codex multi-agent execution depends on native tools and configuration. Review agents are separate from ordinary ODD implementation agents; RDD runs only under the user-owned switch and candidate consent when applicable.
 
 ## Client-specific details
 
