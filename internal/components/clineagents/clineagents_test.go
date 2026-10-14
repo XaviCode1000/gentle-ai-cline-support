@@ -100,8 +100,8 @@ func TestEmbeddedAgentYAMLContracts(t *testing.T) {
 		if strings.Trim(fields["description"], "\"") == "" {
 			t.Fatalf("%s: empty description", name)
 		}
-		if fields["tools"] != "[]" {
-			t.Fatalf("%s: tools = %q, want empty (reviewers run without execution tools)", name, fields["tools"])
+		if fields["tools"] != "[read_files]" {
+			t.Fatalf("%s: tools = %q, want read-only [read_files] (reviewers run without execution tools)", name, fields["tools"])
 		}
 		if !strings.Contains(body, "BLOCKER") {
 			t.Fatalf("%s: body lost the shared severity vocabulary", name)
