@@ -174,7 +174,7 @@ Model hints:
 
 - If your assigned model tier is `small`, load only up to 3 relevant `SKILL.md` paths and prefer numbered step instructions instead of long paragraphs.
 
-When delegating to sub-agents, pass `## Skills to load before work` followed by exact `SKILL.md` paths. Sub-agents must `mem_save` important discoveries before returning.
+When delegating to sub-agents, pass `## Skills to load before work` followed by exact `SKILL.md` paths. Sub-agents that can reach Engram must `mem_save` important discoveries before returning; Cline `spawn_agent` delegates have no MCP, so they return a full result payload including Key Learnings and the lead or orchestrator persists it from the parent session.
 <!-- /section:model-small -->
 
 ### Sub-Agent Launch Deduplication (MANDATORY)
@@ -225,8 +225,8 @@ Sub-agents get a fresh context with NO memory. The orchestrator controls context
 #### Delegated tasks
 
 - Read context: orchestrator searches engram (`mem_search`) for relevant prior context and passes it in the sub-agent prompt. Sub-agent does NOT search engram itself.
-- Write context: sub-agent MUST save significant discoveries, decisions, or bug fixes to engram via `mem_save` before returning. Sub-agent has full detail — save before returning, not after.
-- Always add to sub-agent prompt: `"If you make important discoveries, decisions, or fix bugs, save them to engram via mem_save with project: '{project}'."`
+- Write context: where the delegate can reach Engram (OpenCode/Claude/Codex agents), the sub-agent MUST save significant discoveries, decisions, or bug fixes via `mem_save` before returning. Cline `spawn_agent` delegates have no MCP access, so they instead return the full result payload including Key Learnings, and the lead or orchestrator persists those findings from the parent session.
+- Cline delegation prompt addition: `"When you find important discoveries, decisions, or bug fixes, include them, including any Key Learnings, in your result payload so the lead can persist them to engram from this session."` On runtimes with Engram access use: `"If you make important discoveries, decisions, or fix bugs, save them to engram via mem_save with project: '{project}'."`
 - Skills: orchestrator resolves matching paths from the registry and injects them as `## Skills to load before work` in the sub-agent prompt. Sub-agents read those exact `SKILL.md` files before work.
 
 Forward the applicable test-first policy and runner from `## Implementation Routing` to implementation workers. When that policy applies, require observed RED → GREEN → REFACTOR. For ODD recovery, read the full project-scoped Engram observation and the feature task document before resuming; do not treat a search preview as full context.

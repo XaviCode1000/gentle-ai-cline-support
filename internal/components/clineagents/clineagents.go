@@ -115,9 +115,22 @@ func Install(home string, adapter agents.Adapter) (InstallResult, error) {
 	}
 	var result InstallResult
 
+	// Read every input before touching the target so a missing or unreadable
+	// embedded asset leaves the previous installation untouched. Retiring
+	// is only safe after all inputs are in memory.
+	desired := make(map[string]string, len(managedAgents))
+	for _, name := range managedAgents {
+		content, err := assets.Read(adapter.EmbeddedSubAgentsDir() + "/" + name)
+		if err != nil {
+			return InstallResult{}, fmt.Errorf("read embedded cline agent %s: %w", name, err)
+		}
+		desired[name] = content
+	}
 	// Retire previously shipped agents first: a renamed managed set must
 	// not leave stale tools behind. Only Gentle AI-owned bytes are
-	// removed; user files under the same name are preserved.
+	// removed; user files under the same name are preserved. Retirement
+	// runs after the embedded inputs have been read, so a read failure cannot
+	// leave a partial install behind.
 	for _, name := range RetiredFileNames(adapter.Agent()) {
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
@@ -135,16 +148,6 @@ func Install(home string, adapter agents.Adapter) (InstallResult, error) {
 		}
 		result.Changed = true
 		result.Files = append(result.Files, path)
-	}
-	// Read every input before touching the target so a missing embedded
-	// asset never leaves a partial install behind.
-	desired := make(map[string]string, len(managedAgents))
-	for _, name := range managedAgents {
-		content, err := assets.Read(adapter.EmbeddedSubAgentsDir() + "/" + name)
-		if err != nil {
-			return InstallResult{}, fmt.Errorf("read embedded cline agent %s: %w", name, err)
-		}
-		desired[name] = content
 	}
 	names := append([]string(nil), managedAgents...)
 	sort.Strings(names)
