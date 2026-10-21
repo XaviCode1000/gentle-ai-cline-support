@@ -116,6 +116,19 @@ func agentOverlay(id model.AgentID) []byte {
 	case model.AgentHermes:
 		// Hermes permission format is undocumented — no overlay is injected (§14).
 		return nil
+	case model.AgentCline:
+		// Cline's global settings (GlobalSettingsSchema in the Cline SDK)
+		// expose exactly one injectable approval switch: the global
+		// "toolAutoApprove" boolean. There is no per-tool map and no
+		// path-scoped deny list, and the schema strips every unknown key.
+		// gentle-ai's contract is "permissive mode plus a secrets deny
+		// list" (the .env/.ssh/.aws/*.pem paths every other runtime's
+		// overlay denies), and Cline cannot express the deny half: writing
+		// the boolean alone would approve every tool call with no
+		// equivalent protection while silently removing the user's
+		// approval gate. So Cline gets no overlay at all, the same
+		// deliberate decision Codex, Cursor, Antigravity and Hermes carry.
+		return nil
 	default:
 		return nil
 	}

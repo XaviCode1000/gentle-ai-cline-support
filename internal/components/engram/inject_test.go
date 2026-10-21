@@ -16,6 +16,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravity"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/claude"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/cline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/gemini"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/hermes"
@@ -1190,7 +1191,8 @@ func antigravityAdapter() agents.Adapter {
 	return antigravity.NewAdapter()
 }
 
-func piAdapter() agents.Adapter { return pi.NewAdapter() }
+func piAdapter() agents.Adapter    { return pi.NewAdapter() }
+func clineAdapter() agents.Adapter { return cline.NewAdapter() }
 
 // assertArgsHaveToolsAgent is a shared helper that validates a JSON file
 // contains the MCP "engram" entry with --tools=agent in args.
@@ -4168,5 +4170,45 @@ func TestUpsertCodexTableKeyBeforeMCPServersIgnoresDelimitersInStringsAndComment
 		if table < 0 || table > mcp {
 			t.Fatalf("prefix %q: [features] must be inserted before the MCP block:\n%s", prefix, got)
 		}
+	}
+}
+
+// TestInjectClineKeepsStableEngramCommand pins Cline in the standard-agent
+// cohort: the merged MCP config keeps the stable engram command — the PATH
+// name "engram" — instead of the absolute path of the binary that happened to
+// be on PATH at install time. The version-pinned path breaks as soon as that
+// directory is replaced by the next engram release, while the stable command
+// keeps working for every runtime that resolves it through PATH.
+func TestInjectClineKeepsStableEngramCommand(t *testing.T) {
+	SetLookPathForTest(t, "/opt/gentle/engram-1.2.3/bin/engram", "")
+
+	home := t.TempDir()
+	adapter := clineAdapter()
+	if _, err := Inject(home, adapter); err != nil {
+		t.Fatalf("Inject(cline) error = %v", err)
+	}
+
+	raw, err := os.ReadFile(adapter.MCPConfigPath(home, "engram"))
+	if err != nil {
+		t.Fatalf("ReadFile(Cline MCP config) error = %v", err)
+	}
+	var root struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &root); err != nil {
+		t.Fatalf("unmarshal Cline MCP config: %v\n%s", err, raw)
+	}
+	server, ok := root.MCPServers["engram"]
+	if !ok {
+		t.Fatalf("Cline MCP config has no engram server:\n%s", raw)
+	}
+	if server.Command != "engram" {
+		t.Fatalf("Cline engram command = %q, want the stable %q", server.Command, "engram")
+	}
+	if len(server.Args) != 2 || server.Args[0] != "mcp" || server.Args[1] != "--tools=agent" {
+		t.Fatalf("Cline engram args = %v, want [mcp --tools=agent]", server.Args)
 	}
 }

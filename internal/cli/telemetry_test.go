@@ -9,11 +9,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/telemetry"
 )
 
@@ -110,7 +112,7 @@ func TestTelemetryPolicyFlagsAndHelp(t *testing.T) {
 func TestTelemetryContractsArePinned(t *testing.T) {
 	root := filepath.Join("..", "..", "contracts", "telemetry", "v1", "schemas")
 	want := map[string]string{
-		"event.schema.json":   "fa0aafba3314fea4b9a17a7df75fa53559c43f42963bd7a1783884c51caec20d",
+		"event.schema.json":   "9ec9058a36816fc96392463d2d66b89e46b52e048fd6c524397c60efea4cb7f7",
 		"status.schema.json":  "1ae7ee2f80b1cc51e66093e2a3ab6f10a85a940966c1e84451b44e9456dca822",
 		"trigger.schema.json": "0e810811c5a673bc21f06a9fb0c5ce03841d46e3b35fc436b25860c2f0fded58",
 	}
@@ -212,6 +214,113 @@ func validateTelemetrySchema(t *testing.T, schema *jsonschema.Schema, payload []
 	}
 	if err := schema.Validate(document); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// collectorEventSchemaPath is the collector's local copy of the event
+// contract. The client sends against the published contract, but the
+// collector is the side that rejects an event it does not understand, so its
+// copy of the closed enum matters as much as the published one.
+const collectorEventSchemaPath = "../../internal/telemetrycollector/schema/event.schema.json"
+
+// compileCollectorEventSchema compiles the collector's local copy of the
+// event contract.
+func compileCollectorEventSchema(t *testing.T) *jsonschema.Schema {
+	t.Helper()
+	payload, err := os.ReadFile(collectorEventSchemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document any
+	if err := json.Unmarshal(payload, &document); err != nil {
+		t.Fatal(err)
+	}
+	compiler := jsonschema.NewCompiler()
+	const location = "https://schemas.gentle-ai.dev/telemetry/v1/event.schema.json"
+	if err := compiler.AddResource(location, document); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(location)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return schema
+}
+
+// telemetryEventAgentEnum returns the closed agent enum and the maxItems cap
+// of one schema copy.
+func telemetryEventAgentEnum(t *testing.T, path string) (enum []string, maxItems int) {
+	t.Helper()
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Properties struct {
+			Agents struct {
+				Items struct {
+					Enum []string `json:"enum"`
+				} `json:"items"`
+				MaxItems int `json:"maxItems"`
+			} `json:"agents"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(payload, &doc); err != nil {
+		t.Fatal(err)
+	}
+	return doc.Properties.Agents.Items.Enum, doc.Properties.Agents.MaxItems
+}
+
+// TestTelemetryEventSchemaAcceptsClineAgent pins the Cline agent id in both
+// copies of the closed event contract. internal/telemetry/event.go emits
+// "cline" for every Cline install, and a closed enum without it makes the
+// collector reject the whole event — silent data loss for every Cline user.
+func TestTelemetryEventSchemaAcceptsClineAgent(t *testing.T) {
+	event := []byte(`{
+  "schema": "gentle-ai.telemetry-event/v1",
+  "event": "install",
+  "install_id": "3f1b1c2a-8f4e-4c2b-9a3d-2b7c5e6f1a90",
+  "sent_at": "2026-10-21T10:00:00Z",
+  "version": "4.2.0",
+  "os": "linux",
+  "arch": "amd64",
+  "agents": ["cline"],
+  "components": [],
+  "rdd_enabled": false
+}`)
+
+	validateTelemetrySchema(t, compileTelemetrySchema(t, "event.schema.json"), event)
+	validateTelemetrySchema(t, compileCollectorEventSchema(t), event)
+}
+
+// TestTelemetryEventSchemaCoversEveryModelAgent keeps the closed agent enum
+// in sync with the agents gentle-ai actually ships: a new agent that is not
+// in the enum makes its events uncollectable, and the collector's maxItems
+// cap must leave room for the whole enum, not only for the agents a single
+// install uses.
+func TestTelemetryEventSchemaCoversEveryModelAgent(t *testing.T) {
+	registry, err := agents.NewDefaultRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	supported := registry.SupportedAgents()
+	if len(supported) == 0 {
+		t.Fatal("the default registry reports no agents")
+	}
+
+	contractEnum, _ := telemetryEventAgentEnum(t, filepath.Join("..", "..", "contracts", "telemetry", "v1", "schemas", "event.schema.json"))
+	collectorEnum, collectorMaxItems := telemetryEventAgentEnum(t, collectorEventSchemaPath)
+	for _, agent := range supported {
+		if !slices.Contains(contractEnum, string(agent)) {
+			t.Errorf("published event schema does not accept agent %q", agent)
+		}
+		if !slices.Contains(collectorEnum, string(agent)) {
+			t.Errorf("collector event schema does not accept agent %q", agent)
+		}
+	}
+
+	if collectorMaxItems != len(collectorEnum) {
+		t.Errorf("collector event schema maxItems = %d, want %d (the size of the agent enum)", collectorMaxItems, len(collectorEnum))
 	}
 }
 

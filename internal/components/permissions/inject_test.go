@@ -14,6 +14,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/antigravity"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/claude"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/cline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/codex"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/cursor"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/gemini"
@@ -410,6 +411,7 @@ func vscodeAdapter() agents.Adapter      { return vscode.NewAdapter() }
 func codexAdapter() agents.Adapter       { return codex.NewAdapter() }
 func antigravityAdapter() agents.Adapter { return antigravity.NewAdapter() }
 func hermesAdapter() agents.Adapter      { return hermes.NewAdapter() }
+func clineAdapter() agents.Adapter       { return cline.NewAdapter() }
 
 // codexInjectedLegacyConfig mirrors a config.toml produced by the retired
 // gentle-dev permission profile injection, wrapped in user-authored content.
@@ -832,6 +834,40 @@ func TestInjectAntigravitySkipsPermissions(t *testing.T) {
 	overlay := agentOverlay(model.AgentAntigravity)
 	if overlay != nil {
 		t.Errorf("expected nil overlay for Antigravity, got %s", overlay)
+	}
+}
+
+// TestInjectClineSkipsPermissions pins the deliberate no-op for Cline.
+// Cline's global settings expose a single global toolAutoApprove boolean and
+// no path-scoped deny list, so gentle-ai's "permissive mode plus a secrets
+// deny list" contract cannot be honoured: writing the boolean would drop the
+// user's approval gate with no equivalent protection. gentle-ai therefore
+// writes nothing to Cline's settings — the same decision Codex, Cursor,
+// Antigravity and Hermes carry, and the same shape the component already
+// documents for every runtime without an injectable permission schema.
+func TestInjectClineSkipsPermissions(t *testing.T) {
+	if overlay := agentOverlay(model.AgentCline); overlay != nil {
+		t.Errorf("expected nil overlay for Cline, got %s", overlay)
+	}
+
+	home := t.TempDir()
+	adapter := clineAdapter()
+	if got := TargetPath(home, adapter); got != "" {
+		t.Errorf("TargetPath(cline) = %q, want empty (Cline has no permission injection target)", got)
+	}
+
+	result, err := Inject(home, adapter)
+	if err != nil {
+		t.Fatalf("Inject(cline) error = %v", err)
+	}
+	if result.Changed {
+		t.Error("Inject(cline) changed = true, want false (no file should be written)")
+	}
+	if len(result.Files) != 0 {
+		t.Errorf("Inject(cline) files = %v, want [] (no file should be written)", result.Files)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".cline")); !os.IsNotExist(err) {
+		t.Errorf("Inject(cline) created ~/.cline (stat err = %v), want no file creation", err)
 	}
 }
 
