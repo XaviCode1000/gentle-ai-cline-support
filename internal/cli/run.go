@@ -975,14 +975,21 @@ func (r *installRuntime) stagePlan() pipeline.StagePlan {
 		step.backgroundPolicy = r.backgroundActivation != nil && r.backgroundActivation.Capability().Ready() && r.background.Effective == model.OpenCodeBackgroundOn
 		apply = append(apply, step)
 	}
-	for _, agent := range r.resolved.Agents {
-		if nativeReviewAgentSupported(agent) {
-			apply = append(apply, nativeReviewAgentStep{id: "agent:native-review:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, state: r.state})
-		}
-	}
+	// The Cline configured-agent retirement runs BEFORE the native review
+	// installer. Cline's review lenses are managed by the native installer
+	// now, and it only rewrites a file whose bytes it owns: a file left by
+	// the superseded ODD-era lens set is unowned, so the installer would
+	// skip it and the retirement would then remove it, leaving the runtime
+	// with no lens at all. Retiring first turns that upgrade path into a
+	// clean replacement.
 	for _, agent := range r.resolved.Agents {
 		if clineagents.AgentSupported(agent) {
 			apply = append(apply, clineConfiguredAgentsStep{id: "agent:cline-agents:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, state: r.state})
+		}
+	}
+	for _, agent := range r.resolved.Agents {
+		if nativeReviewAgentSupported(agent) {
+			apply = append(apply, nativeReviewAgentStep{id: "agent:native-review:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, state: r.state})
 		}
 	}
 	apply = append(apply, retiredSDDAssetStepList(retiredSDDAssetSteps("agent:retire-sdd-assets:", r.homeDir, r.workspaceDir, r.scope, r.resolved.Agents, nil, r.state))...)

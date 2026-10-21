@@ -592,14 +592,18 @@ func (r *syncRuntime) stagePlan() pipeline.StagePlan {
 		})
 	}
 
-	for _, agent := range r.agentIDs {
-		if nativeReviewAgentSupported(agent) {
-			apply = append(apply, nativeReviewAgentStep{id: "sync:agent:native-review:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, changedFiles: &r.changedFiles, state: r.state})
-		}
-	}
+	// The Cline configured-agent retirement runs BEFORE the native review
+	// installer, for the same reason as in install: the native installer
+	// only rewrites bytes it owns, so a file left by the superseded lens
+	// set would be skipped and then removed, leaving no lens behind.
 	for _, agent := range r.agentIDs {
 		if clineagents.AgentSupported(agent) {
 			apply = append(apply, clineConfiguredAgentsStep{id: "sync:agent:cline-agents:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, changedFiles: &r.changedFiles, state: r.state})
+		}
+	}
+	for _, agent := range r.agentIDs {
+		if nativeReviewAgentSupported(agent) {
+			apply = append(apply, nativeReviewAgentStep{id: "sync:agent:native-review:" + string(agent), agent: agent, homeDir: r.homeDir, workspaceDir: r.workspaceDir, scope: r.scope, selection: r.selection, changedFiles: &r.changedFiles, state: r.state})
 		}
 	}
 	apply = append(apply, retiredSDDAssetStepList(retiredSDDAssetSteps("sync:agent:retire-sdd-assets:", r.homeDir, r.workspaceDir, r.scope, r.agentIDs, &r.changedFiles, r.state))...)
