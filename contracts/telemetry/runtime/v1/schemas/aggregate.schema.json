@@ -7,7 +7,7 @@
   "properties": {
     "schema": {"const": "gentle-ai.telemetry-runtime-aggregate/v1"},
     "registry": {"const": 1},
-    "host": {"enum": ["claude-code", "opencode", "codex", "pi"]},
+    "host": {"enum": ["claude-code", "opencode", "codex", "pi", "cline"]},
     "rows": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/row"}}
   },
   "$defs": {

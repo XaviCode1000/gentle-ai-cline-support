@@ -5,7 +5,7 @@
 
 ← [Back to README](../README.md)
 
-`gentle-ai.review-integration/v2` coordinates one immutable review transaction at a time. Go owns the candidate snapshot, review admission, correction boundary, terminal burn, and all provider-facing bindings. Claude Code, OpenCode, Codex, and Pi transport provider-issued work; no runtime adapter decides review or delivery.
+`gentle-ai.review-integration/v2` coordinates one immutable review transaction at a time. Go owns the candidate snapshot, review admission, correction boundary, terminal burn, and all provider-facing bindings. Claude Code, OpenCode, Codex, Pi, and Cline transport provider-issued work; no runtime adapter decides review or delivery.
 
 ## RDD defaults to ON
 
@@ -44,7 +44,7 @@ A session in repository A may review a nested target in unrelated repository B o
 | Isolation | Equal lineage text in A and B names independent transactions. Approval burns B only; A remains untouched. |
 | Delivery | Ordinary repository policy and any explicit delivery authorization name B. Approval never authorizes delivery. |
 
-This lifecycle is available only to Claude Code, Codex, OpenCode, and Pi. Unsupported runtimes fail before repository or authority mutation.
+This lifecycle is available only to Claude Code, Codex, OpenCode, Pi, and Cline. Unsupported runtimes fail before repository or authority mutation.
 
 ### Repository context handles
 
@@ -202,7 +202,7 @@ After a successful burn, no terminal receipt, tombstone, witness, mirror, or del
 
 ## Reviewer transport
 
-The provider contract is shared by Claude Code, OpenCode, Codex, and Pi. Go derives frozen trees, manifest, subject hash, role, binding, schema, evidence limits, and admission. Adapters transport opaque provider output and never parse bindings, manufacture a verdict, or mutate review authority. Gentle AI writes nothing into the Pi system prompt because gentle-pi owns it, so this contract ships as `orchestration/pi.md` in the published provider contract bundle, which gentle-pi mirrors and injects at session start.
+The provider contract is shared by Claude Code, OpenCode, Codex, Pi, and Cline. Go derives frozen trees, manifest, subject hash, role, binding, schema, evidence limits, and admission. Adapters transport opaque provider output and never parse bindings, manufacture a verdict, or mutate review authority. Gentle AI writes nothing into the Pi system prompt because gentle-pi owns it, so this contract ships as `orchestration/pi.md` in the published provider contract bundle, which gentle-pi mirrors and injects at session start.
 
 The in-process Claude Code reviewer uses the saved model and effort for each role (`risk`, `readability`, `reliability`, `resilience`, `refuter`, and `validator`). It passes `--effort` only for a non-default effort supported by the assigned model, using the same compatibility rule as generated `review-*` subagents. Default effort and legacy model-only assignments omit the flag. Missing or malformed assignments preserve native defaults or a valid legacy model fallback. The reviewer keeps `--setting-sources ""`; it does not inherit user or project effort settings.
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,6 +126,115 @@ func TestTelemetryContractsArePinned(t *testing.T) {
 		if actual := hex.EncodeToString(digest[:]); actual != expected {
 			t.Fatalf("%s digest = %s, want %s", name, actual, expected)
 		}
+	}
+}
+
+// TestTelemetryRuntimeContractsArePinned pins the published runtime
+// telemetry contracts, the ones the client sends against and the collector
+// rejects with. The host enum of the aggregate contract now admits "cline"
+// (Cline total support), so the bytes of the published contract changed on
+// purpose and the guard moves with them.
+func TestTelemetryRuntimeContractsArePinned(t *testing.T) {
+	root := filepath.Join("..", "..", "contracts", "telemetry", "runtime", "v1", "schemas")
+	want := map[string]string{
+		"aggregate.schema.json": "820c978ff07fddd8f21c4878b4f34ba087c7f54f84c897888c076fb6c1d2dedb",
+		"event.schema.json":     "528d9e0813d9508b0472731a25eafbed690809bd1ad6fab57a7b970bd120cb38",
+	}
+	for name, expected := range want {
+		payload, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(payload)
+		if actual := hex.EncodeToString(digest[:]); actual != expected {
+			t.Fatalf("%s digest = %s, want %s", name, actual, expected)
+		}
+	}
+}
+
+// compileRuntimeTelemetrySchema compiles one published runtime telemetry
+// contract together with the aggregate contract it references, so a host
+// value the aggregate contract rejects is rejected by the collector's
+// runtime-event contract too.
+func compileRuntimeTelemetrySchema(t *testing.T, name string) *jsonschema.Schema {
+	t.Helper()
+	root := filepath.Join("..", "..", "contracts", "telemetry", "runtime", "v1", "schemas")
+	compiler := jsonschema.NewCompiler()
+	for _, file := range []string{"aggregate.schema.json", "event.schema.json"} {
+		payload, err := os.ReadFile(filepath.Join(root, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var document any
+		if err := json.Unmarshal(payload, &document); err != nil {
+			t.Fatal(err)
+		}
+		location := "https://gentle-ai.dev/contracts/telemetry/runtime/v1/schemas/" + file
+		if err := compiler.AddResource(location, document); err != nil {
+			t.Fatal(err)
+		}
+	}
+	schema, err := compiler.Compile("https://gentle-ai.dev/contracts/telemetry/runtime/v1/schemas/" + name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return schema
+}
+
+// clineRuntimeAggregateBatch is the batch the Cline hook adapter emits
+// (internal/components/telemetryruntime/cline.go builds a batch with the
+// host "cline"; internal/telemetry/runtime.go accepts that host).
+const clineRuntimeAggregateBatch = `{
+  "schema": "gentle-ai.telemetry-runtime-aggregate/v1",
+  "registry": 1,
+  "host": "cline",
+  "rows": [
+    {
+      "model": {"provider": "anthropic", "id": "claude-sonnet-4-5"},
+      "model_evidence": "response",
+      "agent_kind": "built_in",
+      "agent_class": "orchestrator",
+      "selected_effort": "unavailable",
+      "effective_effort": "unavailable",
+      "launches": null,
+      "responses": 1,
+      "input_tokens": {"reported": 0, "unavailable": 1, "unsupported": 0, "sum": 0},
+      "output_tokens": {"reported": 1, "unavailable": 0, "unsupported": 0, "sum": 12},
+      "cache_read_tokens": {"reported": 0, "unavailable": 1, "unsupported": 0, "sum": 0},
+      "cache_creation_tokens": {"reported": 0, "unavailable": 1, "unsupported": 0, "sum": 0},
+      "reasoning_tokens": {"reported": 0, "unavailable": 0, "unsupported": 1, "sum": 0},
+      "total_tokens": {"reported": 1, "unavailable": 0, "unsupported": 0, "sum": 12},
+      "error_category": "none",
+      "duration": {"kind": "message", "measured_count": 1, "sum_ms": 42.5}
+    }
+  ]
+}`
+
+// TestTelemetryRuntimeContractAcceptsClineHost pins the Cline host in the
+// published runtime telemetry contracts. The Go side already emits the host
+// "cline", but the published host enum was closed without it: the client
+// sends the batch and the collector rejects it, which is silent data loss
+// for every Cline user. The aggregate contract and the collector's
+// runtime-event contract that references it must both accept the host.
+func TestTelemetryRuntimeContractAcceptsClineHost(t *testing.T) {
+	aggregate := []byte(clineRuntimeAggregateBatch)
+	validateTelemetrySchema(t, compileRuntimeTelemetrySchema(t, "aggregate.schema.json"), aggregate)
+
+	event := []byte(strings.Replace(clineRuntimeAggregateBatch,
+		`"schema": "gentle-ai.telemetry-runtime-aggregate/v1"`,
+		`"schema": "gentle-ai.telemetry-runtime-event/v1", "delivery_id": "0123456789abcdef0123456789abcdef"`, 1))
+	validateTelemetrySchema(t, compileRuntimeTelemetrySchema(t, "event.schema.json"), event)
+
+	// Triangulate: the host enum stays closed. An unknown host is still a
+	// rejected batch, so widening the enum did not open the contract.
+	unknown := []byte(strings.Replace(clineRuntimeAggregateBatch, `"host": "cline"`, `"host": "not-a-runtime"`, 1))
+	schema := compileRuntimeTelemetrySchema(t, "aggregate.schema.json")
+	var document any
+	if err := json.Unmarshal(unknown, &document); err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.Validate(document); err == nil {
+		t.Fatal("the runtime aggregate contract accepted an unknown host")
 	}
 }
 

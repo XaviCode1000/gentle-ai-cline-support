@@ -8,7 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
 )
@@ -104,7 +107,13 @@ func TestReviewProviderArtifactV21ContractsArePinned(t *testing.T) {
 		// relay drives consent with its own declared runtime identity, which
 		// the emitter legitimately publishes once the relay handshake is
 		// declared. Deliberate, not drift.
-		"schemas/consent-v3.schema.json": "f56b1809c1bff21713795ef37a095c6ecfdbbb3cf928bcf604b8d5f33be3dea5",
+		//
+		// Cline total support: the agent enum also admits "cline". A Cline
+		// review start binds the declared Cline runtime identity and the
+		// emitter publishes it, but the closed enum still rejected the Cline
+		// consent question every other consumer validates against. The enum
+		// now follows the emitter. Deliberate, not drift.
+		"schemas/consent-v3.schema.json": "f61536811fea8dcaf48f0db07b220c5da55e8d71cdec9c9156ae9756d01d0d26",
 		"schemas/status.schema.json":     "3b257b417270744061dc943a97537e253e36e34de4591b0400e3c38ea3efde80",
 	}
 	for name, expected := range want {
@@ -656,6 +665,59 @@ func TestReviewProviderArtifactV2FixturesValidate(t *testing.T) {
 	}
 	if err := consentV3.Validate(); err != nil || consentV3.Agent != "claude-code" {
 		t.Fatalf("v2.1 consent fixture: %#v, %v", consentV3, err)
+	}
+}
+
+// TestReviewConsentV3SchemaAcceptsClineAgent pins the Cline runtime in the
+// published v2.1 consent question contract. A Cline review start emits a
+// consent question whose agent is "cline" (review_consent_contract.go binds
+// the declared runtime identity), but the published agent enum was closed
+// without it: the consent question every other consumer validates against
+// rejects the Cline one.
+func TestReviewConsentV3SchemaAcceptsClineAgent(t *testing.T) {
+	fixture, err := os.ReadFile(filepath.Join("..", "..", "contracts", "review-integration", "v2", "fixtures", "consent-v3.fixture.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaPayload, err := os.ReadFile(filepath.Join("..", "..", "contracts", "review-integration", "v2", "schemas", "consent-v3.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document any
+	if err := json.Unmarshal(schemaPayload, &document); err != nil {
+		t.Fatal(err)
+	}
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(ReviewIntegrationConsentSchemaIDV3, document); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(ReviewIntegrationConsentSchemaIDV3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cline := strings.Replace(string(fixture), `"agent": "claude-code"`, `"agent": "cline"`, 1)
+	if cline == string(fixture) {
+		t.Fatal("the consent fixture carries no agent to rebind")
+	}
+	var clineDocument any
+	if err := json.Unmarshal([]byte(cline), &clineDocument); err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.Validate(clineDocument); err != nil {
+		t.Fatalf("the published consent contract rejects the Cline consent question: %v", err)
+	}
+
+	// Triangulate: the agent enum stays closed. An unknown runtime is still
+	// a rejected consent question, so widening the enum did not open the
+	// contract.
+	unknown := strings.Replace(string(fixture), `"agent": "claude-code"`, `"agent": "not-a-runtime"`, 1)
+	var unknownDocument any
+	if err := json.Unmarshal([]byte(unknown), &unknownDocument); err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.Validate(unknownDocument); err == nil {
+		t.Fatal("the published consent contract accepted an unknown agent")
 	}
 }
 
