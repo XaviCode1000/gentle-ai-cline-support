@@ -20,6 +20,7 @@ import (
 // boundary, rather than relying on a filename glob that silently grows scope.
 var reviewerAdapterImplementations = map[string]string{
 	"claude_adapter.go": "ClaudeAdapter",
+	"cline_adapter.go":  "ClineAdapter",
 	"codex_adapter.go":  "CodexAdapter",
 }
 

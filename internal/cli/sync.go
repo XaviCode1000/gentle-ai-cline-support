@@ -859,6 +859,9 @@ func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, s
 		// directory, installed independently of components.
 		if adapter.Agent() == model.AgentCline {
 			paths[agenthooks.ClineSkillRegistryHookPath(homeDir, adapter)] = struct{}{}
+			for _, hookPath := range agenthooks.ClineReviewStopHookPaths(homeDir, adapter) {
+				paths[hookPath] = struct{}{}
+			}
 		}
 	}
 	if configDir := openCodeTelemetryConfigDir(homeDir, workspaceDir, scope, selection.Agents); configDir != "" {

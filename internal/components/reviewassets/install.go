@@ -28,6 +28,12 @@ var NativeAgentManifest = map[model.AgentID][]string{
 	model.AgentKiroIDE:    {"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md"},
 	model.AgentCursor:     {"jd-fix-agent.md", "jd-judge-a.md", "jd-judge-b.md"},
 	model.AgentKimi:       {"gentleman.yaml"},
+	// Cline receives Judgment Day and the receipt-driven review lenses,
+	// refuter, and validator: it advertises the review transport and captures
+	// the reviewer in process, like Claude. Cline discovers configured agents
+	// as YAML files with frontmatter, so the same set is installed under the
+	// names its own runtime reads.
+	model.AgentCline: {"jd-fix-agent.yaml", "jd-judge-a.yaml", "jd-judge-b.yaml", "review-readability.yaml", "review-refuter.yaml", "review-reliability.yaml", "review-resilience.yaml", "review-risk.yaml"},
 }
 
 // RetiredNativeAgentManifest lists the review agents earlier releases installed

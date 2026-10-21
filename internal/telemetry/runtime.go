@@ -327,7 +327,7 @@ func decodeRuntime(data []byte) (RuntimeBatch, error) {
 	if err := d.Decode(&b); err != nil {
 		return b, errRuntimeInput
 	}
-	if b.Schema != RuntimeSchema || runtimeNumber(b.Registry) != "1" || !runtimeMember(b.Host, "claude-code|opencode|codex|pi") || len(b.Rows) < 1 || len(b.Rows) > 32 {
+	if b.Schema != RuntimeSchema || runtimeNumber(b.Registry) != "1" || !runtimeMember(b.Host, "claude-code|opencode|codex|pi|cline") || len(b.Rows) < 1 || len(b.Rows) > 32 {
 		return b, errRuntimeInput
 	}
 	b.Registry = json.RawMessage("1")

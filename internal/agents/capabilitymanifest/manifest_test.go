@@ -202,16 +202,17 @@ func TestEveryManifestKeepsWorkRoutingDormantAndHashesCanonically(t *testing.T) 
 	t.Parallel()
 
 	const wantRoutingDigest = "sha256:1c343ca2792be730e02b35f1655a19884a2672dc0d2915ef2afb33b6ac01bc1c"
-	// Digests pin the four providers with an enforceable fresh-reviewer
-	// boundary: Claude Code's generated reviewer has no live tools, OpenCode
-	// relays one ordinary task through Go-owned admission, Codex's provider
-	// subprocess reaches the same contract, and gentle-pi's host relay
-	// forwards the Go-issued opaque task to a fresh locked-down pi
+	// Digests pin the five providers with an enforceable fresh-reviewer
+	// boundary: Claude Code's generated reviewer has no live tools, Cline
+	// runs one isolated headless process with no live tool and no user
+	// context, OpenCode relays one ordinary task through Go-owned admission,
+	// Codex's provider subprocess reaches the same contract, and gentle-pi's
+	// host relay forwards the Go-issued opaque task to a fresh locked-down pi
 	// subprocess (gentle-pi#311, gentle-ai#3249).
 	wantManifestDigests := map[model.AgentID]string{
 		model.AgentAntigravity:   "sha256:4666df6712fc63b0aacf1227cb28d0afdace1f98cbdd611aa2d5e8d4048b87ce",
 		model.AgentClaudeCode:    "sha256:0644de1b6539cffee24ed3d673b450bf1f460fe5db7e8f05c5a0911aace8b280",
-		model.AgentCline:         "sha256:d1a1a4a2c5fda74400233ed844ddf0383e2cf79eeb6f4e773ace64cd83222de8",
+		model.AgentCline:         "sha256:3e872d8723d85d2356680d5c6d8283681f2e9ddf8a70a735107a0b96316550ba",
 		model.AgentCodex:         "sha256:b47855dc0acdae65aa2215eba09135087d32a890814dc73baab13595ecb6602b",
 		model.AgentConductor:     "sha256:f06b2f6250b4fe2795a4f3c5dba242f4d19933ba2601311f1e8ed1b9fc95e48f",
 		model.AgentCursor:        "sha256:acb6f0092917d40ee12ca88b2661f623f317f0c7436b8b4205fccabf6dd9a9ca",
@@ -245,7 +246,7 @@ func TestEveryManifestKeepsWorkRoutingDormantAndHashesCanonically(t *testing.T) 
 			if manifest.Advertises(ContractWorkRoutingV1) {
 				t.Fatal("work-routing must remain unadvertised before final activation")
 			}
-			wantImmutableExecutor := agent == model.AgentClaudeCode || agent == model.AgentOpenCode || agent == model.AgentCodex || agent == model.AgentPi
+			wantImmutableExecutor := agent == model.AgentClaudeCode || agent == model.AgentCline || agent == model.AgentOpenCode || agent == model.AgentCodex || agent == model.AgentPi
 			if got := manifest.Advertises(ContractImmutableReviewExecutorV1); got != wantImmutableExecutor {
 				t.Fatalf("immutable reviewer execution advertised = %t, want %t", got, wantImmutableExecutor)
 			}
@@ -306,7 +307,7 @@ func TestEveryManifestDigestStaysByteStable(t *testing.T) {
 	wantNonPiDigests := map[model.AgentID]string{
 		model.AgentAntigravity:   "sha256:4666df6712fc63b0aacf1227cb28d0afdace1f98cbdd611aa2d5e8d4048b87ce",
 		model.AgentClaudeCode:    "sha256:0644de1b6539cffee24ed3d673b450bf1f460fe5db7e8f05c5a0911aace8b280",
-		model.AgentCline:         "sha256:d1a1a4a2c5fda74400233ed844ddf0383e2cf79eeb6f4e773ace64cd83222de8",
+		model.AgentCline:         "sha256:3e872d8723d85d2356680d5c6d8283681f2e9ddf8a70a735107a0b96316550ba",
 		model.AgentCodex:         "sha256:b47855dc0acdae65aa2215eba09135087d32a890814dc73baab13595ecb6602b",
 		model.AgentConductor:     "sha256:f06b2f6250b4fe2795a4f3c5dba242f4d19933ba2601311f1e8ed1b9fc95e48f",
 		model.AgentCursor:        "sha256:acb6f0092917d40ee12ca88b2661f623f317f0c7436b8b4205fccabf6dd9a9ca",
@@ -351,13 +352,14 @@ func TestEveryManifestDigestStaysByteStable(t *testing.T) {
 }
 
 func TestReviewTransportAdvertisementIsClosedCatalogSet(t *testing.T) {
-	const wantExposed = 4
+	const wantExposed = 5
 
 	exposed := 0
 	for _, agent := range catalog.AllAgents() {
 		t.Run(string(agent.ID), func(t *testing.T) {
 			manifest := MustForAgent(agent.ID)
 			want := agent.ID == model.AgentClaudeCode ||
+				agent.ID == model.AgentCline ||
 				agent.ID == model.AgentOpenCode ||
 				agent.ID == model.AgentCodex ||
 				agent.ID == model.AgentPi

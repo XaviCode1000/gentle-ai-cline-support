@@ -27,6 +27,12 @@ var installedHashes = map[model.AgentID]map[string]string{
 	model.AgentKimi: {
 		"gentleman.yaml": "4fd319f06d3381954556e7828c96bfc0901c428c1f00bacc407d1f63342349b1",
 	},
+	// Cline receives the same review set in its own schema: configured
+	// agents are YAML files with frontmatter, so the installed bytes are the
+	// embedded Cline assets verbatim.
+	model.AgentCline: {
+		"jd-fix-agent.yaml": "d172fe9d79c3baec319521a5fb91173067b75f56e4f32abee951a97394e2e809", "jd-judge-a.yaml": "c6b67032e11cbec037ad821342b788af3e68724ac054fb82747198e7346887a9", "jd-judge-b.yaml": "afc6ef578325c731172a960082c6f988398a2cb7951ed81a8d92f1397a84ec67", "review-readability.yaml": "de9d8eabc4b8fa18220c0d8f150987ab38a155c29bc01abd075ebecac75c0d38", "review-refuter.yaml": "b34f1e946cd0fcf800e51cb235523014d1b75e9257fec93b3c8f7490ab73489b", "review-reliability.yaml": "2dec9247dc1df6e7b99c5ad1ed0313706c211b451290d521daf9342116bc24aa", "review-resilience.yaml": "0d62d3b8f341d8330a6c3102fe41066eb171a31f0efda399022b17bdb43c4aee", "review-risk.yaml": "815a70bdce93cd94ba363c9c0a6df3b2ebb4024be34299109a9e01a643cab6bd",
+	},
 	model.AgentKiroIDE: {
 		"jd-fix-agent.md": "f60d26fa25e810c7c6d4526005b886aaca65d82337a51430206b22b605a3a265", "jd-judge-a.md": "ff22d142450a24db2beaf4f0e75f18ea5ec676721489523b99fe4c714aa9c4d0", "jd-judge-b.md": "7dc4cba47c0bad685485c4fdb2b67816edda30b7c8b3f6db426614b7b4357dc1",
 	},
@@ -175,8 +181,8 @@ func TestInstalledNativeAgentParity(t *testing.T) {
 		})
 		count += len(expected)
 	}
-	if count != 12 {
-		t.Fatalf("fixture has %d paths, want 12", count)
+	if count != 20 {
+		t.Fatalf("fixture has %d paths, want 20", count)
 	}
 }
 

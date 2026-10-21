@@ -2025,6 +2025,13 @@ func (s agentRoutingGuidanceStep) Run() error {
 	if s.changedFiles != nil && retainedHooks.Changed {
 		*s.changedFiles = append(*s.changedFiles, retainedHooks.Files...)
 	}
+	clineHooks, err := agenthooks.InstallRetainedClineHooks(s.homeDir, adapter)
+	if err != nil {
+		return fmt.Errorf("install retained Cline hooks for %q: %w", s.agent, err)
+	}
+	if s.changedFiles != nil && clineHooks.Changed {
+		*s.changedFiles = append(*s.changedFiles, clineHooks.Files...)
+	}
 	telemetryHooks, err := agenthooks.InstallCodexTelemetry(s.homeDir, adapter)
 	if err != nil {
 		return fmt.Errorf("install Codex telemetry hooks for %q: %w", s.agent, err)
@@ -3953,6 +3960,9 @@ func installBackupTargets(homeDir, workspaceDir string, scope InstallScope, sele
 		// what the writer writes.
 		if adapter.Agent() == model.AgentCline {
 			paths[agenthooks.ClineSkillRegistryHookPath(homeDir, adapter)] = struct{}{}
+			for _, hookPath := range agenthooks.ClineReviewStopHookPaths(homeDir, adapter) {
+				paths[hookPath] = struct{}{}
+			}
 		}
 		// Native review and Judgment Day agents are installed independently of SDD.
 		// Retired review agents are listed too: the installer may remove them.

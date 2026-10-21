@@ -52,6 +52,13 @@ const (
 	// reviewImmutableTransportCodexAdvisoryScratchProcess retains the canonical
 	// Go-owned provider contract across a fresh Codex subprocess boundary.
 	reviewImmutableTransportCodexAdvisoryScratchProcess reviewImmutableTransport = "codex_advisory_scratch_process"
+	// reviewImmutableTransportClineHeadlessProcess is Cline's own fresh
+	// reviewer boundary: Go owns the prompt, the admission, the receipts, and
+	// the gates, and the runtime executes one isolated headless CLI process
+	// (an empty working directory, an isolated configuration root, an isolated
+	// data directory, and an isolated home) that carries no live tool and no
+	// user context. The runtime's own final report is the captured result.
+	reviewImmutableTransportClineHeadlessProcess reviewImmutableTransport = "cline_headless_process"
 	// reviewImmutableTransportPiHostRelay is host-mediated like OpenCode's
 	// transport, but with the launcher owned by gentle-pi: the Pi host reads
 	// the negotiated collection input, launches a brand-new print-mode pi
@@ -157,6 +164,11 @@ func reviewImmutableRuntimeCapabilityChecking(agent model.AgentID, openCodeRunti
 	switch agent {
 	case model.AgentClaudeCode:
 		policy.Eligible = true
+	case model.AgentCline:
+		// Cline runs the reviewer itself: one isolated headless CLI process
+		// with no live tool and no user context (see
+		// reviewerprovider.ClineAdapter).
+		policy.Eligible = true
 	case model.AgentCodex:
 		policy.Eligible = true
 	case model.AgentOpenCode:
@@ -184,6 +196,8 @@ func reviewImmutableRuntimeCapabilityChecking(agent model.AgentID, openCodeRunti
 	switch agent {
 	case model.AgentClaudeCode:
 		policy.Transport = reviewImmutableTransportClaudePromptCarried
+	case model.AgentCline:
+		policy.Transport = reviewImmutableTransportClineHeadlessProcess
 	case model.AgentOpenCode:
 		policy.Transport = reviewImmutableTransportOpenCodeProviderInjected
 	case model.AgentCodex:
@@ -196,6 +210,7 @@ func reviewImmutableRuntimeCapabilityChecking(agent model.AgentID, openCodeRunti
 
 func (capability reviewImmutableRuntimePolicy) supportsImmutableReceiptReview() bool {
 	return capability.Transport == reviewImmutableTransportClaudePromptCarried ||
+		capability.Transport == reviewImmutableTransportClineHeadlessProcess ||
 		capability.Transport == reviewImmutableTransportOpenCodeProviderInjected ||
 		capability.Transport == reviewImmutableTransportCodexAdvisoryScratchProcess ||
 		capability.Transport == reviewImmutableTransportPiHostRelay

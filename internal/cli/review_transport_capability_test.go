@@ -26,6 +26,7 @@ func TestImmutableReviewRuntimeMatrix(t *testing.T) {
 		supported bool
 	}{
 		{name: "Claude prompt carried fresh executor", runtime: string(model.AgentClaudeCode), eligible: true, transport: reviewImmutableTransportClaudePromptCarried, supported: true},
+		{name: "Cline isolated headless process", runtime: string(model.AgentCline), eligible: true, transport: reviewImmutableTransportClineHeadlessProcess, supported: true},
 		{name: "OpenCode provider relay", runtime: string(model.AgentOpenCode), eligible: true, transport: reviewImmutableTransportOpenCodeProviderInjected, supported: true},
 		{name: "Codex subprocess boundary", runtime: string(model.AgentCodex), eligible: true, transport: reviewImmutableTransportCodexAdvisoryScratchProcess, supported: true},
 		{name: "Kilo has no immutable transport", runtime: string(model.AgentKilocode), transport: reviewImmutableTransportUnsupported},
@@ -56,12 +57,13 @@ func TestImmutableReviewRuntimeMatrix(t *testing.T) {
 func TestImmutableReviewRuntimeCapabilityIsClosedCatalogSet(t *testing.T) {
 	t.Setenv(reviewPiHostRelayContractEnvironment, reviewPiHostRelayContract)
 
-	const wantExposed = 4
+	const wantExposed = 5
 	exposed := 0
 	for _, agent := range catalog.AllAgents() {
 		t.Run(string(agent.ID), func(t *testing.T) {
 			capability := reviewImmutableRuntimeCapability(agent.ID)
 			want := agent.ID == model.AgentClaudeCode ||
+				agent.ID == model.AgentCline ||
 				agent.ID == model.AgentOpenCode ||
 				agent.ID == model.AgentCodex ||
 				agent.ID == model.AgentPi
@@ -186,6 +188,7 @@ func TestSupportedImmutableReviewTransportReachesRepositoryValidation(t *testing
 		runtime string
 	}{
 		{name: "Claude", runtime: string(model.AgentClaudeCode)},
+		{name: "Cline", runtime: string(model.AgentCline)},
 		{name: "OpenCode", runtime: string(model.AgentOpenCode)},
 		{name: "Codex", runtime: string(model.AgentCodex)},
 		{name: "Pi", runtime: string(model.AgentPi)},
@@ -219,7 +222,7 @@ func TestImmutableReviewTransportRefusalNamesWorkingExits(t *testing.T) {
 			if !strings.Contains(err.Error(), exit) {
 				t.Fatalf("refusal does not name the clone-scoped kill switch: %v", err)
 			}
-			if !strings.Contains(err.Error(), string(model.AgentClaudeCode)) || !strings.Contains(err.Error(), string(model.AgentOpenCode)) || !strings.Contains(err.Error(), string(model.AgentCodex)) || !strings.Contains(err.Error(), string(model.AgentPi)) {
+			if !strings.Contains(err.Error(), string(model.AgentClaudeCode)) || !strings.Contains(err.Error(), string(model.AgentCline)) || !strings.Contains(err.Error(), string(model.AgentOpenCode)) || !strings.Contains(err.Error(), string(model.AgentCodex)) || !strings.Contains(err.Error(), string(model.AgentPi)) {
 				t.Fatalf("refusal does not name every supported runtime: %v", err)
 			}
 			if strings.Contains(err.Error(), "supported immutable review runtimes: "+string(runtime)) {

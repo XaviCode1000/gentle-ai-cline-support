@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
 )
 
@@ -48,11 +49,70 @@ type reviewStopHookPayload struct {
 	StopHookActive bool   `json:"stop_hook_active"`
 }
 
+// reviewStopHookClinePayload is the Cline runtime's hook stdin payload
+// (cline/sdk/packages/shared/src/hooks/events.ts). The runtime names its
+// event hookName, carries the session in sessionContext.rootSessionId, the
+// workspace in workspaceRoots, and the pending tool call in tool_call. The
+// Cline runtime executes hook FILES, so this command is invoked by the
+// runtime's own hook files rather than by a settings document.
+type reviewStopHookClinePayload struct {
+	HookName       string   `json:"hookName"`
+	TaskID         string   `json:"taskId"`
+	WorkspaceRoots []string `json:"workspaceRoots"`
+	SessionContext struct {
+		RootSessionID string `json:"rootSessionId"`
+	} `json:"sessionContext"`
+	ToolCall struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"tool_call"`
+}
+
+// clineCompletionTool is the Cline tool that reports a task complete
+// (cline/sdk/packages/core/src/extensions/tools/constants.ts). It is Cline's
+// equivalent of Claude Code's Stop event: the moment the agent declares the
+// work finished.
+const clineCompletionTool = "submit_and_exit"
+
+// reviewStopHookClineSessionID is the session identity the Cline runtime
+// reports. The root session id identifies the whole session; the task id is
+// the fallback for a runtime that reports no session context.
+func (payload reviewStopHookClinePayload) reviewStopHookClineSessionID() string {
+	if session := strings.TrimSpace(payload.SessionContext.RootSessionID); session != "" {
+		return session
+	}
+	return strings.TrimSpace(payload.TaskID)
+}
+
+// reviewStopHookClineCwd is the workspace the Cline runtime reports. The
+// runtime executes its hook files with the workspace as the working
+// directory, so the first workspace root is the repository to inspect.
+func (payload reviewStopHookClinePayload) reviewStopHookClineCwd() string {
+	for _, root := range payload.WorkspaceRoots {
+		if trimmed := strings.TrimSpace(root); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
 // reviewStopHookOutput is the sole reminder envelope printed to stdout.
 type reviewStopHookOutput struct {
 	Schema   string `json:"schema"`
 	Decision string `json:"decision"`
 	Reason   string `json:"reason"`
+}
+
+// reviewStopHookClineOutput is the Cline runtime's reminder envelope. The
+// runtime reads a hook's stdout as a control object
+// (cline/sdk/packages/core/src/hooks/hook-file-hooks.ts): cancel stops the
+// pending tool call and errorMessage carries the reason, so the Cline agent
+// reads the exact same instruction Claude Code reads from decision and
+// reason.
+type reviewStopHookClineOutput struct {
+	Schema       string `json:"schema"`
+	Cancel       bool   `json:"cancel"`
+	ErrorMessage string `json:"errorMessage"`
 }
 
 // reviewStopHookReminderRecord is the per-session state: BaselineTargetIdentity
@@ -95,8 +155,8 @@ func RunReviewStopHook(args []string, stdout io.Writer) error {
 // JSON reminder object a Stop event may print.
 func runReviewStopHook(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	flags := newReviewFlagSet("review stop-hook", stderr,
-		"Read one Claude Code hook payload from stdin (SessionStart or Stop). On SessionStart, record the repository's current unreviewed-candidate identity as this session's baseline, with no output. On Stop, when receipt-driven development is enabled and the repository holds a candidate the session did not start with, print one reminder that routes the agent through the selectorless STATUS preflight before it reports completion. Every other case -- including an unrecognized hook_event_name -- is silent, and this command never runs review start itself.")
-	agent := flags.String("agent", "", "required; generated active runtime identity (only claude-code is accepted today)")
+		"Read one runtime hook payload from stdin. Claude Code sends a SessionStart or a Stop payload: SessionStart records the repository's current unreviewed-candidate identity as this session's baseline, with no output, and Stop prints one reminder that routes the agent through the selectorless STATUS preflight before it reports completion. Cline sends its own payload: its task start records the same baseline, and its completion tool call prints the same reminder. In both runtimes the reminder appears only when receipt-driven development is enabled and the repository holds a candidate the session did not start with. Every other case -- including an unrecognized event -- is silent, and this command never runs review start itself.")
+	agent := flags.String("agent", "", "required; generated active runtime identity (claude-code, cline)")
 	cwdOverride := flags.String("cwd", "", "optional; overrides the hook payload's cwd")
 	if err := parseReviewFlags(flags, args); err != nil {
 		return err
@@ -109,15 +169,22 @@ func runReviewStopHook(args []string, stdin io.Reader, stdout, stderr io.Writer)
 		return reviewPreflightError(fmt.Errorf("unexpected review stop-hook argument %q", flags.Arg(0)))
 	}
 	runtimeAgent := strings.TrimSpace(*agent)
-	if runtimeAgent != "claude-code" {
-		// refusal:by-design operator-knowledge: only the caller can declare which runtime is executing, and only claude-code is wired to this hook today.
-		return reviewPreflightError(fmt.Errorf("review stop-hook requires --agent to be claude-code; got %q", runtimeAgent))
+	if !reviewStopHookWiredRuntime(model.AgentID(runtimeAgent)) {
+		// refusal:by-design operator-knowledge: only the caller can declare which runtime is executing, and only a runtime this hook is wired to may run it.
+		return reviewPreflightError(fmt.Errorf("review stop-hook requires --agent naming a runtime wired to this hook (claude-code, cline); got %q", runtimeAgent))
 	}
 
 	raw, err := io.ReadAll(io.LimitReader(stdin, maxReviewStopHookPayloadBytes))
 	if err != nil {
 		return fmt.Errorf("review stop-hook: read hook payload: %w", err)
 	}
+
+	ctx := context.Background()
+
+	if model.AgentID(runtimeAgent) == model.AgentCline {
+		return runReviewStopHookCline(ctx, raw, strings.TrimSpace(*cwdOverride), runtimeAgent, stdout)
+	}
+
 	var payload reviewStopHookPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return fmt.Errorf("review stop-hook: decode hook payload: %w", err)
@@ -128,13 +195,60 @@ func runReviewStopHook(args []string, stdin io.Reader, stdout, stderr io.Writer)
 		repo = strings.TrimSpace(payload.Cwd)
 	}
 
-	ctx := context.Background()
-
 	switch payload.HookEventName {
 	case "SessionStart":
 		return runReviewStopHookSessionStart(ctx, payload.SessionID, repo, runtimeAgent)
 	case "Stop":
 		return runReviewStopHookStop(ctx, payload, repo, runtimeAgent, stdout)
+	default:
+		return nil
+	}
+}
+
+// reviewStopHookWiredRuntime reports whether agent is a runtime whose hook
+// convention is wired to this command. Claude Code runs it as a SessionStart
+// and a Stop hook; Cline runs it as a file-based hook file, one for the task
+// start and one for the tool call that reports completion.
+func reviewStopHookWiredRuntime(agent model.AgentID) bool {
+	return agent == model.AgentClaudeCode || agent == model.AgentCline
+}
+
+// runReviewStopHookCline is the Cline branch of this command.
+//
+// The Cline runtime has no Stop event: it ends a task with a tool call. So
+// the Cline mapping is the runtime's own two moments: the task start records
+// the session baseline, and the completion tool call is the gate that must
+// not pass while an unreviewed candidate exists. Every other tool call, and
+// every other event, stays silent.
+func runReviewStopHookCline(ctx context.Context, raw []byte, repo, runtimeAgent string, stdout io.Writer) error {
+	var payload reviewStopHookClinePayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return fmt.Errorf("review stop-hook: decode hook payload: %w", err)
+	}
+	if repo == "" {
+		repo = payload.reviewStopHookClineCwd()
+	}
+	sessionID := payload.reviewStopHookClineSessionID()
+
+	switch payload.HookName {
+	case "agent_start":
+		return runReviewStopHookSessionStart(ctx, sessionID, repo, runtimeAgent)
+	case "tool_call":
+		if payload.ToolCall.Name != clineCompletionTool {
+			return nil
+		}
+		return reviewStopHookGate(ctx, sessionID, repo, runtimeAgent, func(reason string) error {
+			encoded, err := json.Marshal(reviewStopHookClineOutput{
+				Schema:       reviewStopHookSchema,
+				Cancel:       true,
+				ErrorMessage: reason,
+			})
+			if err != nil {
+				return fmt.Errorf("review stop-hook: encode reminder: %w", err)
+			}
+			_, err = fmt.Fprintln(stdout, string(encoded))
+			return err
+		})
 	default:
 		return nil
 	}
@@ -166,7 +280,27 @@ func runReviewStopHookStop(ctx context.Context, payload reviewStopHookPayload, r
 	if payload.StopHookActive {
 		return nil
 	}
+	return reviewStopHookGate(ctx, payload.SessionID, repo, runtimeAgent, func(reason string) error {
+		output := reviewStopHookOutput{
+			Schema:   reviewStopHookSchema,
+			Decision: "block",
+			Reason:   reason,
+		}
+		encoded, err := json.Marshal(output)
+		if err != nil {
+			return fmt.Errorf("review stop-hook: encode reminder: %w", err)
+		}
+		_, err = fmt.Fprintln(stdout, string(encoded))
+		return err
+	})
+}
 
+// reviewStopHookGate is the one completion gate both runtimes share: it
+// resolves the current candidate, decides whether the reminder is owed, and
+// hands the reminder text to the runtime's own envelope. The envelope is the
+// only thing that differs between them; the decision, the silence rules, and
+// the once-per-session-and-candidate bookkeeping are shared.
+func reviewStopHookGate(ctx context.Context, sessionID, repo, runtimeAgent string, emit func(reason string) error) error {
 	root, targetIdentity, status, ok, err := reviewStopHookResolveTargetIdentity(ctx, repo, runtimeAgent)
 	if err != nil {
 		return err
@@ -186,12 +320,12 @@ func runReviewStopHookStop(ctx context.Context, payload reviewStopHookPayload, r
 
 	// Check first, persist after delivery below: recording before the write
 	// risks losing the reminder if it fails or the process dies in between.
-	if reviewStopHookSessionIDPattern.MatchString(payload.SessionID) {
+	if reviewStopHookSessionIDPattern.MatchString(sessionID) {
 		home, herr := os.UserHomeDir()
 		if herr != nil {
 			return fmt.Errorf("resolve user home directory: %w", herr)
 		}
-		record, hadRecord, rerr := readReviewStopHookRecord(reviewStopHookRecordPath(home, payload.SessionID))
+		record, hadRecord, rerr := readReviewStopHookRecord(reviewStopHookRecordPath(home, sessionID))
 		if rerr != nil {
 			return rerr
 		}
@@ -209,7 +343,7 @@ func runReviewStopHookStop(ctx context.Context, payload reviewStopHookPayload, r
 			// is stable across two Stops (the writer settled), the ordinary
 			// reminder resumes; the window bounds the silence either way.
 			if record.LastSeenTargetIdentity != targetIdentity {
-				if serr := recordReviewStopHookLastSeen(payload.SessionID, targetIdentity); serr != nil {
+				if serr := recordReviewStopHookLastSeen(sessionID, targetIdentity); serr != nil {
 					return serr
 				}
 				return nil
@@ -217,19 +351,10 @@ func runReviewStopHookStop(ctx context.Context, payload reviewStopHookPayload, r
 		}
 	}
 
-	output := reviewStopHookOutput{
-		Schema:   reviewStopHookSchema,
-		Decision: "block",
-		Reason:   reviewStopHookReasonText(targetIdentity, root, runtimeAgent, status.NextTransition.Execute.Command),
-	}
-	encoded, err := json.Marshal(output)
-	if err != nil {
-		return fmt.Errorf("review stop-hook: encode reminder: %w", err)
-	}
-	if _, err := fmt.Fprintln(stdout, string(encoded)); err != nil {
+	if err := emit(reviewStopHookReasonText(targetIdentity, root, runtimeAgent, status.NextTransition.Execute.Command)); err != nil {
 		return err
 	}
-	_, err = recordReviewStopHookReminder(payload.SessionID, targetIdentity)
+	_, err = recordReviewStopHookReminder(sessionID, targetIdentity)
 	return err
 }
 

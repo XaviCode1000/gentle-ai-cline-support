@@ -644,3 +644,151 @@ func TestReviewStopHookQuietOnlyForAnUnsupportedAuthorityFilesystem(t *testing.T
 		t.Fatal("an ordinary resolution failure was silenced")
 	}
 }
+
+// reviewStopHookClineTestPayload builds one Cline hook stdin payload. The
+// Cline runtime names its event hookName and reports the session, the
+// workspace, and the pending tool call (see the Cline hook payload schema).
+func reviewStopHookClineTestPayload(t *testing.T, hookName, sessionID, cwd, toolName string) string {
+	t.Helper()
+	payload := map[string]any{
+		"hookName":       hookName,
+		"taskId":         "task-1",
+		"workspaceRoots": []string{cwd},
+		"sessionContext": map[string]any{"rootSessionId": sessionID},
+		"userId":         "user",
+		"agent_id":       "agent",
+	}
+	if toolName != "" {
+		payload["tool_call"] = map[string]any{"id": "call-1", "name": toolName, "input": map[string]any{}}
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(encoded)
+}
+
+// TestClineStopHookBlocksTheCompletionToolCall proves the Cline branch of the
+// review stop hook: the runtime has no Stop event, so the completion tool
+// call is the gate, and it is blocked with the same canonical STATUS
+// instruction the Claude branch prints.
+func TestClineStopHookBlocksTheCompletionToolCall(t *testing.T) {
+	home := reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	stageReviewStopHookCandidate(t, repo)
+	enableReviewStopHookRDD(t, repo)
+
+	stdin := strings.NewReader(reviewStopHookClineTestPayload(t, "tool_call", "cline-session", repo, "submit_and_exit"))
+	var stdout, stderr bytes.Buffer
+	if err := runReviewStopHook([]string{"--agent", "cline"}, stdin, &stdout, &stderr); err != nil {
+		t.Fatalf("runReviewStopHook: %v\nstderr: %s", err, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %s", stderr.String())
+	}
+	var result reviewStopHookClineOutput
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("decode Cline stop-hook output: %v\n%s", err, stdout.String())
+	}
+	if result.Schema != reviewStopHookSchema || !result.Cancel {
+		t.Fatalf("result = %#v, want a cancelling reminder", result)
+	}
+	wantStatusCommand := fmt.Sprintf("gentle-ai review status --cwd %s --contract %s --agent cline --next-transition", repo, ReviewIntegrationContractV2)
+	if !strings.Contains(result.ErrorMessage, wantStatusCommand) {
+		t.Fatalf("reason missing canonical STATUS command:\n%s", result.ErrorMessage)
+	}
+	if _, err := os.Stat(reviewStopHookStateFile(home, "cline-session")); err != nil {
+		t.Fatalf("expected reminder state file: %v", err)
+	}
+}
+
+// TestClineStopHookStaysSilentForEveryOtherToolCall proves the gate blocks
+// only the completion tool: every other tool call stays silent, so the
+// agent can still run the review the reminder names.
+func TestClineStopHookStaysSilentForEveryOtherToolCall(t *testing.T) {
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	stageReviewStopHookCandidate(t, repo)
+	enableReviewStopHookRDD(t, repo)
+
+	for _, tool := range []string{"read_files", "run_commands", "search_codebase"} {
+		t.Run(tool, func(t *testing.T) {
+			stdin := strings.NewReader(reviewStopHookClineTestPayload(t, "tool_call", "cline-session-"+tool, repo, tool))
+			var stdout, stderr bytes.Buffer
+			if err := runReviewStopHook([]string{"--agent", "cline"}, stdin, &stdout, &stderr); err != nil {
+				t.Fatalf("runReviewStopHook: %v\nstderr: %s", err, stderr.String())
+			}
+			if strings.TrimSpace(stdout.String()) != "" {
+				t.Fatalf("%s was blocked: %s", tool, stdout.String())
+			}
+		})
+	}
+}
+
+// TestClineStopHookRecordsTheSessionBaselineAtTaskStart proves the Cline
+// runtime's task start is the session baseline: it records the candidate the
+// session did not produce, silently.
+func TestClineStopHookRecordsTheSessionBaselineAtTaskStart(t *testing.T) {
+	home := reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	stageReviewStopHookCandidate(t, repo)
+	enableReviewStopHookRDD(t, repo)
+
+	stdin := strings.NewReader(reviewStopHookClineTestPayload(t, "agent_start", "cline-baseline", repo, ""))
+	var stdout, stderr bytes.Buffer
+	if err := runReviewStopHook([]string{"--agent", "cline"}, stdin, &stdout, &stderr); err != nil {
+		t.Fatalf("runReviewStopHook: %v\nstderr: %s", err, stderr.String())
+	}
+	if strings.TrimSpace(stdout.String()) != "" {
+		t.Fatalf("task start printed a reminder: %s", stdout.String())
+	}
+	record, err := os.ReadFile(reviewStopHookStateFile(home, "cline-baseline"))
+	if err != nil {
+		t.Fatalf("expected baseline state file: %v", err)
+	}
+	if !strings.Contains(string(record), "baseline_target_identity") {
+		t.Fatalf("baseline record = %s", record)
+	}
+}
+
+// TestClineStopHookIgnoresUnknownEvents proves an event the runtime does not
+// define, and an event the gate does not own, stay silent.
+func TestClineStopHookIgnoresUnknownEvents(t *testing.T) {
+	reviewModeHome(t)
+	repo := initReviewCLIRepo(t)
+	stageReviewStopHookCandidate(t, repo)
+	enableReviewStopHookRDD(t, repo)
+
+	for _, hookName := range []string{"agent_end", "session_shutdown", "tool_result", ""} {
+		t.Run(hookName, func(t *testing.T) {
+			stdin := strings.NewReader(reviewStopHookClineTestPayload(t, hookName, "cline-unknown", repo, ""))
+			var stdout, stderr bytes.Buffer
+			if err := runReviewStopHook([]string{"--agent", "cline"}, stdin, &stdout, &stderr); err != nil {
+				t.Fatalf("runReviewStopHook: %v\nstderr: %s", err, stderr.String())
+			}
+			if strings.TrimSpace(stdout.String()) != "" {
+				t.Fatalf("%s printed a reminder: %s", hookName, stdout.String())
+			}
+		})
+	}
+}
+
+// TestReviewStopHookRequiresWiredRuntime proves the hook refuses a runtime
+// whose hook convention is not wired to it, and names the runtimes that are.
+func TestReviewStopHookRequiresWiredRuntime(t *testing.T) {
+	for _, runtime := range []string{"codex", "opencode", "pi", "unknown-runtime"} {
+		t.Run(runtime, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			err := runReviewStopHook([]string{"--agent", runtime}, strings.NewReader("{}"), &stdout, &stderr)
+			if err == nil {
+				t.Fatal("expected a refusal")
+			}
+			if !strings.Contains(err.Error(), "claude-code, cline") {
+				t.Fatalf("refusal does not name the wired runtimes: %v", err)
+			}
+			if stdout.Len() != 0 {
+				t.Fatalf("refusal wrote to stdout: %s", stdout.String())
+			}
+		})
+	}
+}

@@ -82,6 +82,7 @@ func TestRuntimeStdinBudgetsByVerb(t *testing.T) {
 		{"send", 500 * time.Millisecond, false},
 		{"opencode", 500 * time.Millisecond, false},
 		{"claude", 3 * time.Second, true},
+		{"cline", 3 * time.Second, true},
 		{"codex", 3 * time.Second, true},
 	} {
 		t.Run(tt.verb, func(t *testing.T) {
@@ -94,7 +95,7 @@ func TestRuntimeStdinBudgetsByVerb(t *testing.T) {
 }
 
 func TestRuntimeHookStdinCompletesWithoutEOF(t *testing.T) {
-	for _, verb := range []string{"claude", "codex"} {
+	for _, verb := range []string{"claude", "cline", "codex"} {
 		t.Run(verb, func(t *testing.T) {
 			r, w := io.Pipe()
 			defer r.Close()
@@ -131,7 +132,7 @@ func TestRuntimeHookStdinAcceptsDelayedPayloadWithinHookBudget(t *testing.T) {
 		runtimeStdinTimeout = old
 		runtimeHookStdinTimeout = oldHook
 	})
-	for _, verb := range []string{"claude", "codex"} {
+	for _, verb := range []string{"claude", "cline", "codex"} {
 		t.Run(verb, func(t *testing.T) {
 			r, w := io.Pipe()
 			defer r.Close()
@@ -394,5 +395,37 @@ func TestTelemetryRuntimeRemovedRoutes(t *testing.T) {
 	}
 	if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
 		t.Fatal("removed route wrote artifacts")
+	}
+}
+
+// TestTelemetryRuntimeClineVerbReadsTheClineHook proves the Cline runtime
+// verb exists and reads one Cline hook payload from stdin.
+func TestTelemetryRuntimeClineVerbReadsTheClineHook(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("DO_NOT_TRACK", "1")
+	var out bytes.Buffer
+	payload := `{"hookName":"agent_end","taskId":"t1","agent_id":"main","parent_agent_id":null,"workspaceRoots":["/tmp"]}`
+	if err := runTelemetryRuntimeInput([]string{"cline", "--json"}, &out, strings.NewReader(payload)); err != nil {
+		t.Fatalf("cline runtime verb error = %v", err)
+	}
+	if !strings.Contains(out.String(), `"disabled"`) {
+		t.Fatalf("cline runtime verb = %s", out.String())
+	}
+}
+
+// TestTelemetryRuntimeUsageNamesEveryRuntimeVerb proves the usage error names
+// every runtime the command accepts, so an operator who types the wrong verb
+// is told the right one.
+func TestTelemetryRuntimeUsageNamesEveryRuntimeVerb(t *testing.T) {
+	var out bytes.Buffer
+	err := runTelemetryRuntimeInput([]string{"cline"}, &out, noOpenCodeRead{t})
+	if err == nil {
+		t.Fatal("accepted a verb without --json")
+	}
+	for _, want := range []string{"send", "opencode", "claude", "cline", "codex"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("usage error does not name %q: %v", want, err)
+		}
 	}
 }

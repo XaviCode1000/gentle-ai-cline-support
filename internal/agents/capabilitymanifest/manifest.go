@@ -156,7 +156,7 @@ func ForAgent(agent model.AgentID) (AgentCapabilityManifest, error) {
 
 // reviewTransportExposureByAgent is the closed set of runtimes that can
 // carry the review protocol. Every supported agent is explicitly dormant
-// first, then only the four runtimes with the required native transport and
+// first, then only the runtimes with the required native transport and
 // immutable reviewer boundary advertise receipt-driven review. A map miss
 // (an unknown agent) remains fail-closed.
 var reviewTransportExposureByAgent = func() map[model.AgentID]ContractExposure {
@@ -165,6 +165,7 @@ var reviewTransportExposureByAgent = func() map[model.AgentID]ContractExposure {
 		exposure[agent] = ContractExposureDormant
 	}
 	exposure[model.AgentClaudeCode] = ContractExposureAdvertised
+	exposure[model.AgentCline] = ContractExposureAdvertised
 	exposure[model.AgentOpenCode] = ContractExposureAdvertised
 	exposure[model.AgentCodex] = ContractExposureAdvertised
 	exposure[model.AgentPi] = ContractExposureAdvertised
@@ -187,12 +188,20 @@ var reviewTransportExposureByAgent = func() map[model.AgentID]ContractExposure {
 // untouched, and returns raw final bytes (gentle-pi#311, gentle-ai#3249).
 // Kilo and every other runtime remain explicitly dormant until they own an
 // equivalent native boundary.
+//
+// Cline advertises through its own isolated headless process: Go materializes
+// the bound prompt and launches one fresh `cline` process in an empty working
+// directory with an isolated configuration root, an isolated data directory,
+// and an isolated home, so the reviewer carries no live tool, no user rules,
+// and no project context, and the runtime's own final report is the captured
+// result.
 var immutableReviewExecutorExposureByAgent = func() map[model.AgentID]ContractExposure {
 	exposure := make(map[model.AgentID]ContractExposure, len(featureClaimsByAgent))
 	for agent := range featureClaimsByAgent {
 		exposure[agent] = ContractExposureDormant
 	}
 	exposure[model.AgentClaudeCode] = ContractExposureAdvertised
+	exposure[model.AgentCline] = ContractExposureAdvertised
 	exposure[model.AgentOpenCode] = ContractExposureAdvertised
 	exposure[model.AgentCodex] = ContractExposureAdvertised
 	exposure[model.AgentPi] = ContractExposureAdvertised

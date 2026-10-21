@@ -377,3 +377,93 @@ func TestClaudeRetainedHooksWithoutSDD(t *testing.T) {
 		t.Fatalf("idempotent bytes: %v", err)
 	}
 }
+
+// TestInstallRetainedClineHooksWritesTheRuntimeHookFiles proves the Cline
+// runtime receives its review and telemetry hooks as the executable files its
+// own runtime executes, named after the events the runtime really has.
+func TestInstallRetainedClineHooksWritesTheRuntimeHookFiles(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentCline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	result, err := InstallRetainedClineHooks(home, adapter)
+	if err != nil {
+		t.Fatalf("InstallRetainedClineHooks error = %v", err)
+	}
+	if !result.Changed {
+		t.Fatal("InstallRetainedClineHooks changed nothing")
+	}
+	want := map[string]string{
+		"TaskStart.sh":    "gentle-ai review stop-hook --agent cline",
+		"PreToolUse.sh":   "gentle-ai review stop-hook --agent cline",
+		"TaskComplete.sh": "gentle-ai telemetry runtime cline --json",
+	}
+	for name, command := range want {
+		path := filepath.Join(ClineHooksDir(home, adapter), name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if !strings.HasPrefix(string(data), "#!") {
+			t.Errorf("%s is not an executable script: %q", name, data)
+		}
+		if !strings.Contains(string(data), command) {
+			t.Errorf("%s does not run %q: %q", name, command, data)
+		}
+		if runtime.GOOS != "windows" {
+			info, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Mode().Perm()&0o111 == 0 {
+				t.Errorf("%s is not executable: %v", name, info.Mode())
+			}
+		}
+	}
+	second, err := InstallRetainedClineHooks(home, adapter)
+	if err != nil {
+		t.Fatalf("second InstallRetainedClineHooks error = %v", err)
+	}
+	if second.Changed {
+		t.Fatal("second install changed the managed hook files")
+	}
+}
+
+// TestInstallRetainedClineHooksRefusesAUserHook proves the installer never
+// overwrites a hook file the user owns.
+func TestInstallRetainedClineHooksRefusesAUserHook(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentCline)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	path := filepath.Join(ClineHooksDir(home, adapter), "TaskStart.sh")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("#!/usr/bin/env bash\necho mine\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallRetainedClineHooks(home, adapter); err == nil {
+		t.Fatal("installed over a user hook")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != "#!/usr/bin/env bash\necho mine\n" {
+		t.Fatalf("user hook changed: %q, %v", data, err)
+	}
+}
+
+// TestInstallRetainedClineHooksIgnoresOtherRuntimes proves the Cline hook
+// installer never touches another runtime.
+func TestInstallRetainedClineHooksIgnoresOtherRuntimes(t *testing.T) {
+	adapter, err := agents.NewAdapter(model.AgentClaudeCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	result, err := InstallRetainedClineHooks(home, adapter)
+	if err != nil || result.Changed || len(result.Files) != 0 {
+		t.Fatalf("InstallRetainedClineHooks(claude) = %+v, %v", result, err)
+	}
+}

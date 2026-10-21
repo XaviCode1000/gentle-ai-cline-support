@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -13,6 +13,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/agents/cline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/assets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
+	"gopkg.in/yaml.v3"
 )
 
 func TestAgentSupportedOnlyCline(t *testing.T) {
@@ -26,31 +27,40 @@ func TestAgentSupportedOnlyCline(t *testing.T) {
 	}
 }
 
+// TestFileNamesMatchEmbedded pins the ownership split: this component
+// installs nothing for Cline, and the review assets in the embedded
+// directory belong to reviewassets, which installs the native review class.
 func TestFileNamesMatchEmbedded(t *testing.T) {
 	adapter := cline.NewAdapter()
 	embedded, err := EmbeddedNames(adapter)
 	if err != nil {
 		t.Fatalf("EmbeddedNames error = %v", err)
 	}
-	if !reflect.DeepEqual(embedded, FileNames(model.AgentCline)) {
-		t.Fatalf("embedded %v != managed %v", embedded, FileNames(model.AgentCline))
+	managed := FileNames(model.AgentCline)
+	if len(managed) != 0 {
+		t.Fatalf("managed Cline agents = %v, want none: the review class is installed by reviewassets", managed)
+	}
+	for _, name := range managed {
+		if !slices.Contains(embedded, name) {
+			t.Fatalf("managed agent %s is not embedded", name)
+		}
+	}
+	if len(embedded) == 0 {
+		t.Fatal("embedded Cline agents are empty: the review assets are missing")
 	}
 }
 
-func TestInstallWritesAndIsIdempotent(t *testing.T) {
+// TestInstallWritesNothingAndIsIdempotent proves the Cline installer writes
+// no configured agent of its own: the review class is reviewassets' job.
+func TestInstallWritesNothingAndIsIdempotent(t *testing.T) {
 	adapter := cline.NewAdapter()
 	home := t.TempDir()
 	first, err := Install(home, adapter)
 	if err != nil {
 		t.Fatalf("Install error = %v", err)
 	}
-	if !first.Changed || len(first.Files) != len(FileNames(model.AgentCline)) {
-		t.Fatalf("first Install = %+v, want all %d files changed", first, len(FileNames(model.AgentCline)))
-	}
-	for _, name := range FileNames(model.AgentCline) {
-		if _, err := os.Stat(filepath.Join(adapter.SubAgentsDir(home), name)); err != nil {
-			t.Fatalf("installed file %s missing: %v", name, err)
-		}
+	if first.Changed {
+		t.Fatalf("first Install = %+v, want no changes", first)
 	}
 	second, err := Install(home, adapter)
 	if err != nil {
@@ -71,8 +81,17 @@ func TestInstallRejectsUnsupportedAgent(t *testing.T) {
 	}
 }
 
+// TestEmbeddedAgentYAMLContracts pins the Cline schema of the embedded
+// review agents: frontmatter with name, description and tools, then the
+// reviewer body. The bodies carry the native review contract, so the ODD
+// verifier bans of the retired set do not apply here.
 func TestEmbeddedAgentYAMLContracts(t *testing.T) {
-	for _, name := range FileNames(model.AgentCline) {
+	adapter := cline.NewAdapter()
+	names, err := EmbeddedNames(adapter)
+	if err != nil {
+		t.Fatalf("EmbeddedNames error = %v", err)
+	}
+	for _, name := range names {
 		content, err := assets.Read("cline/agents/" + name)
 		if err != nil {
 			t.Fatalf("read embedded %s: %v", name, err)
@@ -85,30 +104,30 @@ func TestEmbeddedAgentYAMLContracts(t *testing.T) {
 		if !ok || strings.TrimSpace(body) == "" {
 			t.Fatalf("%s: missing frontmatter close or empty body", name)
 		}
-		fields := map[string]string{}
-		for _, line := range strings.Split(head, "\n") {
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			key, value, ok := strings.Cut(line, ":")
-			if !ok {
-				t.Fatalf("%s: malformed frontmatter line %q", name, line)
-			}
-			fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		var fields struct {
+			Name        string `yaml:"name"`
+			Description string `yaml:"description"`
 		}
-		if fields["name"] != base {
-			t.Fatalf("%s: name = %q, want %q", name, fields["name"], base)
+		if err := yaml.Unmarshal([]byte(head), &fields); err != nil {
+			t.Fatalf("%s: frontmatter is not valid YAML: %v", name, err)
 		}
-		if strings.Trim(fields["description"], "\"") == "" {
+		if fields.Name != base {
+			t.Fatalf("%s: name = %q, want %q", name, fields.Name, base)
+		}
+		if strings.TrimSpace(fields.Description) == "" {
 			t.Fatalf("%s: empty description", name)
 		}
-		if fields["tools"] != "[read_files]" {
-			t.Fatalf("%s: tools = %q, want read-only [read_files] (reviewers run without execution tools)", name, fields["tools"])
+		var raw map[string]any
+		if err := yaml.Unmarshal([]byte(head), &raw); err != nil {
+			t.Fatalf("%s: frontmatter is not valid YAML: %v", name, err)
 		}
-		if !strings.Contains(body, "One pass only") {
-			t.Fatalf("%s: body lost the single-pass bound", name)
+		if _, ok := raw["tools"]; !ok {
+			t.Fatalf("%s: missing tools", name)
 		}
-		for _, banned := range []string{"{{", "sdd", "openspec", "claude", "kiro", "askuserquestion", "frozen", "ledger", "refuter", "receipt", "RDD", "RAR", "native review", "review-integration", "judgment-day", "No findings."} {
+		if !strings.Contains(body, "Cline note") {
+			t.Fatalf("%s: body lost the Cline invocation note", name)
+		}
+		for _, banned := range []string{"{{", "openspec", "askuserquestion"} {
 			if strings.Contains(strings.ToLower(content), banned) {
 				t.Fatalf("%s: banned %q present", name, banned)
 			}

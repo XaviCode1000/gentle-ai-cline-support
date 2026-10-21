@@ -8,9 +8,12 @@ package model
 // It is the single source of truth for that gate and must equal the runtimes
 // whose capability manifest advertises the review transport; a parity test in
 // agentguidance fails when the two drift. Pi is listed because it advertises
-// the transport, but its prompt and agents are owned by Gentle Shell.
+// the transport, but its prompt and agents are owned by Gentle Shell. Cline is
+// listed because it advertises the transport and runs the reviewer itself in
+// one isolated headless process.
 var receiptDrivenDevelopmentAgents = []AgentID{
 	AgentClaudeCode,
+	AgentCline,
 	AgentCodex,
 	AgentOpenCode,
 	AgentPi,

@@ -485,17 +485,18 @@ func (s *Service) buildPlan(agentIDs []model.AgentID, componentIDs []model.Compo
 			case model.AgentCodex:
 				path = filepath.Join(adapter.GlobalConfigDir(s.homeDir), "hooks.json")
 			case model.AgentCline:
-				// Cline executes hook FILES, so its managed hook is removed as
-				// a file instead of being rewritten as a settings document.
-				path = agenthooks.ClineSkillRegistryHookPath(s.homeDir, adapter)
-			}
-			if path == "" {
-				continue
+				// Cline executes hook FILES, so its managed hooks are removed
+				// as files instead of being rewritten as a settings document.
+				for _, hookPath := range clineManagedHookPaths(s.homeDir, adapter) {
+					op := removeClineManagedHook(hookPath, adapter)
+					op.agents = []model.AgentID{agentID}
+					operationsByKey[operationKey(op)] = op
+				}
 			}
 			if agentID == model.AgentCline {
-				op := removeClineSkillRegistryHook(path)
-				op.agents = []model.AgentID{agentID}
-				operationsByKey[operationKey(op)] = op
+				continue
+			}
+			if path == "" {
 				continue
 			}
 			backupTargets[path] = struct{}{}
@@ -1372,11 +1373,20 @@ func managedRetainedHookCommand(cmd string) bool {
 		cmd == "gentle-ai telemetry runtime codex --json"
 }
 
-// removeClineSkillRegistryHook removes the managed Cline hook file. The
-// runtime executes hook files, so teardown deletes the file instead of
-// rewriting a settings document. Only the exact managed content is removed:
-// a hook file the user wrote is left untouched.
-func removeClineSkillRegistryHook(path string) operation {
+// clineManagedHookPaths lists every managed Cline hook file: the
+// skill-registry refresh hook and the retained review and telemetry hooks.
+func clineManagedHookPaths(homeDir string, adapter agents.Adapter) []string {
+	return append(
+		[]string{agenthooks.ClineSkillRegistryHookPath(homeDir, adapter)},
+		agenthooks.ClineReviewStopHookPaths(homeDir, adapter)...,
+	)
+}
+
+// removeClineManagedHook removes one managed Cline hook file. The runtime
+// executes hook files, so teardown deletes the file instead of rewriting a
+// settings document. Only the exact managed content is removed: a hook file
+// the user wrote is left untouched.
+func removeClineManagedHook(path string, adapter agents.Adapter) operation {
 	return operation{
 		typeID: opRemoveFile,
 		path:   path,
@@ -1386,9 +1396,9 @@ func removeClineSkillRegistryHook(path string) operation {
 				if os.IsNotExist(err) {
 					return false, false, nil
 				}
-				return false, false, fmt.Errorf("read cline skill-registry hook %q: %w", path, err)
+				return false, false, fmt.Errorf("read cline hook %q: %w", path, err)
 			}
-			if !agenthooks.IsManagedClineSkillRegistryHook(raw) {
+			if !managedClineHookContent(path, raw, adapter) {
 				return false, false, nil
 			}
 			if err := removeFileIfExists(path); err != nil {
@@ -1397,6 +1407,15 @@ func removeClineSkillRegistryHook(path string) operation {
 			return true, true, nil
 		},
 	}
+}
+
+// managedClineHookContent reports whether the bytes are the managed content
+// of the Cline hook file at that path.
+func managedClineHookContent(path string, data []byte, adapter agents.Adapter) bool {
+	if agenthooks.IsManagedClineSkillRegistryHook(data) {
+		return true
+	}
+	return agenthooks.IsManagedClineHookFile(filepath.Base(path), data, adapter)
 }
 
 // removeSkillRegistryHook removes the managed hook commands. Strict JSON is

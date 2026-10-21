@@ -116,6 +116,8 @@ var reviewProviderAdapterFor = func(contract reviewerprovider.Contract, agent mo
 	switch agent {
 	case model.AgentClaudeCode:
 		return reviewerprovider.NewClaudeAdapter(), nil
+	case model.AgentCline:
+		return reviewerprovider.NewClineAdapter(), nil
 	case model.AgentCodex:
 		return reviewerprovider.NewCodexAdapter(), nil
 	case model.AgentOpenCode:
