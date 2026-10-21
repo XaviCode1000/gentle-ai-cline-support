@@ -16,18 +16,18 @@ Delivery: work-unit commits on the branch; the new GitHub repo, push and PR are 
 
 ## Tasks
 
-- T1 (S5) Create this feature document, its Engram mirror and the visible todo list before the first source write — route: inline — commit: this file
-- T2 (S5) Create `feat/cline-support-total` from `origin/main` `2a3129aa` and port the 8 Cline commits forward, resolving conflicts, `go build ./...` and focused suites green — route: inline — commit: pending
-- T3 (S4) Audit the per-agent surface gap between Cline and the full-tier agents (codebuddy pilot as the reference implementation), producing a path:line gap map — route: inline (evidence read) — commit: pending
-- T4 (S4) Port the missing surfaces to Cline: Engram protocol/injection, permissions overlay, persona, MCP, skills support, skill-registry hook, telemetry, review assets, review transport (reviewer provider), uninstall, doctor, install resolver, codegraph compatibility, TUI/catalog registration — route: delegated writers over disjoint surfaces, parent owns the shared files — commit: pending
-- T4a (S4) Permissions overlay, stable Engram command and the telemetry event schema — route: delegated writer (disjoint surfaces) — commit: pending
-- T4b (S4) The skill-registry hook for Cline, written as the file-based hook the Cline runtime really executes — route: delegated writer (disjoint surfaces) — commit: pending
-- T4c (S4,S8) The native RDD class for Cline: reviewer transport, advertised capability, model flag, review assets, stop hook and telemetry verb — route: delegated writer (disjoint surfaces) — commit: pending
-- T4d (S4) Parent-owned shared wiring: uninstall teardown for the new surfaces, install and backup wiring, the sync permission flag, and the agent documentation — route: inline — commit: pending
-- T5 (S2) Rebuild the binaries from this work's sources: `gentle-ai` Go binary and the Cline SDK/CLI build (`bun run build:sdk`) — route: inline — commit: pending
-- T6 (S1,S2) Repair and use the sandbox: fix the stale `sb` wrapper path, isolate `HOME`/`CLINE_DIR`, run `sync --agent cline` and `install --agent cline`, prove the verification checks and install idempotency — route: inline — commit: pending
-- T7 (S1) Live verification inside the sandbox: a real Cline session proving the ODD rules, skills, MCP servers, agent projection and review roles load, with path:line evidence and a fresh session per run — route: inline — commit: pending
-- T8 (S3) Create `XaviCode1000/gentle-ai-cline-support` (public, standalone), push the full history, add the root `Cline-support-gentle-ai.md` support document with the summary and the upstream PR draft — route: inline — commit: pending
+- [x] T1 (S5) Create this feature document, its Engram mirror and the visible todo list before the first source write — route: inline — commit: `cbeb5c5b`
+- [x] T2 (S5) Create `feat/cline-support-total` from `origin/main` `2a3129aa` and port the 8 Cline commits forward, resolving conflicts, `go build ./...` and focused suites green — route: inline — commit: `83e33d0d`..`0074160d`, plus `76a194b1` (the orchestrator asset rebuilt from the canonical generic source)
+- [x] T3 (S4) Audit the per-agent surface gap between Cline and the full-tier agents (codebuddy pilot as the reference implementation), producing a path:line gap map — route: delegated reader (evidence-budget rule) — commit: none (read-only), recorded in L14
+- [x] T4 (S4) Port the missing surfaces to Cline — route: delegated writers over disjoint surfaces, parent owns the shared files — commits: `f094e50e` (T4a), `0019cf8e` (T4b), `9c5d77ae` (T4c and T4d)
+- [x] T4a (S4) Permissions overlay, stable Engram command and the telemetry event schema — route: delegated writer — commit: `f094e50e`
+- [x] T4b (S4) The skill-registry hook for Cline, written as the file-based hook the Cline runtime really executes — route: inline by the parent (the delegated writer was dropped by the runtime) — commit: `0019cf8e`
+- [x] T4c (S4,S8) The native RDD class for Cline: reviewer transport, advertised capability, model flag, review assets, stop hook and telemetry verb — route: delegated writer — commit: `9c5d77ae`
+- [x] T4d (S4) Parent-owned shared wiring: uninstall teardown, install and backup wiring, the telemetry runtime host, the regenerated goldens and the agent documentation — route: inline — commit: `9c5d77ae`, `927409d3`
+- [x] T5 (S2) Rebuild the binaries from this work's sources: the `gentle-ai` Go binary and the Cline SDK/CLI build — route: delegated writer — commit: none (build artifacts), `sandbox/scripts/build.sh`
+- [x] T6 (S1,S2) Repair and use the sandbox: the wrapper resolves inside the workspace, `HOME`/`CLINE_DIR`/XDG are isolated, and `install --agent cline` reports 20/20 verification checks and is idempotent — route: inline and delegated — commit: `0019cf8e` (wrapper), evidence in `sandbox/evidence/`
+- [x] T7 (S1) Live verification inside the sandbox: the Cline runtime itself reports the rules file, the eight review agents, the four hooks and the two MCP servers; the real `~/.cline` is byte-identical before and after — route: delegated writer plus the parent re-verification — commit: none (evidence), `sandbox/evidence/sandbox-verification.md`
+- [x] T8 (S3) Create `XaviCode1000/gentle-ai-cline-support` (public, standalone), push the full history, add the root `Cline-support-gentle-ai.md` support document with the summary and the upstream PR draft — route: inline — commit: `927409d3`; repository: https://github.com/XaviCode1000/gentle-ai-cline-support (default branch `main` at `927409d3`)
 
 ## Delivery strategy
 
