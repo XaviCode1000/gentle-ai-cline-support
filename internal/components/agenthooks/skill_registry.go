@@ -74,6 +74,11 @@ func InstallSkillRegistry(homeDir string, adapter agents.Adapter) (Result, error
 }
 
 func installSkillRegistry(homeDir string, adapter agents.Adapter, platform string) (Result, error) {
+	if adapter.Agent() == model.AgentCline {
+		// Cline executes hook FILES, not a settings document, so it cannot
+		// share the JSON writers below.
+		return installClineSkillRegistryHook(homeDir, adapter)
+	}
 	var path, event, command string
 	switch adapter.Agent() {
 	case model.AgentCodex:

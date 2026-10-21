@@ -18,6 +18,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/assets"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agentguidance"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agenthooks"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/communitytool"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/engram"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/filemerge"
@@ -483,17 +484,28 @@ func (s *Service) buildPlan(agentIDs []model.AgentID, componentIDs []model.Compo
 				path = adapter.SettingsPath(s.homeDir)
 			case model.AgentCodex:
 				path = filepath.Join(adapter.GlobalConfigDir(s.homeDir), "hooks.json")
+			case model.AgentCline:
+				// Cline executes hook FILES, so its managed hook is removed as
+				// a file instead of being rewritten as a settings document.
+				path = agenthooks.ClineSkillRegistryHookPath(s.homeDir, adapter)
 			}
-			if path != "" {
-				backupTargets[path] = struct{}{}
-				op := rewriteSkillRegistryHook(path)
+			if path == "" {
+				continue
+			}
+			if agentID == model.AgentCline {
+				op := removeClineSkillRegistryHook(path)
 				op.agents = []model.AgentID{agentID}
-				key := operationKey(op)
-				if existing, ok := operationsByKey[key]; ok {
-					op = mergeRewriteOps(existing, op)
-				}
-				operationsByKey[key] = op
+				operationsByKey[operationKey(op)] = op
+				continue
 			}
+			backupTargets[path] = struct{}{}
+			op := rewriteSkillRegistryHook(path)
+			op.agents = []model.AgentID{agentID}
+			key := operationKey(op)
+			if existing, ok := operationsByKey[key]; ok {
+				op = mergeRewriteOps(existing, op)
+			}
+			operationsByKey[key] = op
 		}
 	}
 	if removesAllAgentComponents(componentIDs) {
@@ -1358,6 +1370,33 @@ func managedRetainedHookCommand(cmd string) bool {
 		cmd == "gentle-ai review stop-hook --agent "+string(model.AgentClaudeCode) ||
 		cmd == "gentle-ai telemetry runtime claude --json" ||
 		cmd == "gentle-ai telemetry runtime codex --json"
+}
+
+// removeClineSkillRegistryHook removes the managed Cline hook file. The
+// runtime executes hook files, so teardown deletes the file instead of
+// rewriting a settings document. Only the exact managed content is removed:
+// a hook file the user wrote is left untouched.
+func removeClineSkillRegistryHook(path string) operation {
+	return operation{
+		typeID: opRemoveFile,
+		path:   path,
+		apply: func(path string) (bool, bool, error) {
+			raw, err := readManagedFile(path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return false, false, nil
+				}
+				return false, false, fmt.Errorf("read cline skill-registry hook %q: %w", path, err)
+			}
+			if !agenthooks.IsManagedClineSkillRegistryHook(raw) {
+				return false, false, nil
+			}
+			if err := removeFileIfExists(path); err != nil {
+				return false, false, err
+			}
+			return true, true, nil
+		},
+	}
 }
 
 // removeSkillRegistryHook removes the managed hook commands. Strict JSON is

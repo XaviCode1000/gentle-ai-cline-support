@@ -21,6 +21,7 @@ import (
 	opencodeagent "github.com/gentleman-programming/gentle-ai/v4/internal/agents/opencode"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/backup"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agentguidance"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/components/agenthooks"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/clineagents"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/communitytool"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/engram"
@@ -853,6 +854,11 @@ func syncBackupTargetsScoped(homeDir, workspaceDir string, scope InstallScope, s
 		}
 		if adapter.Agent() == model.AgentCodex {
 			paths[filepath.Join(adapter.GlobalConfigDir(componentInjectionDirScoped(homeDir, workspaceDir, scope, adapter)), "hooks.json")] = struct{}{}
+		}
+		// The Cline skill-registry hook is a file in the runtime hooks
+		// directory, installed independently of components.
+		if adapter.Agent() == model.AgentCline {
+			paths[agenthooks.ClineSkillRegistryHookPath(homeDir, adapter)] = struct{}{}
 		}
 	}
 	if configDir := openCodeTelemetryConfigDir(homeDir, workspaceDir, scope, selection.Agents); configDir != "" {

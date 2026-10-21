@@ -3948,6 +3948,12 @@ func installBackupTargets(homeDir, workspaceDir string, scope InstallScope, sele
 				paths[path] = struct{}{}
 			}
 		}
+		// The Cline skill-registry hook is a file in the runtime hooks
+		// directory, installed independently of components. Snapshot exactly
+		// what the writer writes.
+		if adapter.Agent() == model.AgentCline {
+			paths[agenthooks.ClineSkillRegistryHookPath(homeDir, adapter)] = struct{}{}
+		}
 		// Native review and Judgment Day agents are installed independently of SDD.
 		// Retired review agents are listed too: the installer may remove them.
 		if names := reviewassets.NativeAgentFileNames(adapter.Agent()); len(names) > 0 {
