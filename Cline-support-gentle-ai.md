@@ -18,12 +18,12 @@ participación de Cline en cada superficie por agente que el framework decide en
 
 **Hecho y verificado:** los ocho commits ODD v4 migrados sobre el upstream actual, el
 orchestrator de Cline generado desde el canónico genérico (con su *Cline Delegation
-Boundary*), el hook de skill-registry como archivo ejecutable —que es lo que el runtime
-de Cline realmente ejecuta—, los agentes configurados, la clase RDD nativa (transporte
-de revisor, capacidad anunciada, assets de review, stop hook y verbo de telemetría), el
-comando estable de Engram, el esquema de telemetría corregido, la decisión documentada
-sobre el overlay de permisos, y el teardown con backup. Todo probado contra un sandbox
-aislado: el `~/.cline` real queda byte a byte idéntico.
+Boundary*), los hooks como archivos ejecutables —que es lo que el runtime de Cline
+realmente ejecuta: refresco del registro de skills, puerta de revisión y telemetría—, la
+clase RDD nativa (transporte de revisor, capacidad anunciada, assets de review, stop hook
+y verbo de telemetría), el comando estable de Engram, el esquema de telemetría corregido,
+la decisión documentada sobre el overlay de permisos, y el teardown con backup. Todo
+probado contra un sandbox aislado: el `~/.cline` real queda byte a byte idéntico.
 
 **Decisión de seguridad:** Cline no recibe overlay de permisos. Su único interruptor
 inyectable es el booleano global `toolAutoApprove`, que auto-aprueba toda llamada sin
@@ -93,7 +93,15 @@ solo elimina los bytes gestionados.
 estándar), esquema de telemetría con `cline` en ambas copias y digest re-fijado, y
 overlay de permisos como no-op documentado.
 
-**5. Clase RDD nativa** — Cline es runtime con revisión por recibos: adaptador de
+**5. Una sola vocabulario de review** — el set de verificadores ODD lead-invoked
+(`challenge-assumption` y los roles `verify-*`) queda retirado con la comprobación de
+propiedad ya existente, hash-fijada a los bytes que Gentle AI distribuyó. Los runtimes
+RDD de upstream distribuyen exactamente los ocho agentes de review y Judgment Day, y Cline
+ya tiene esa clase: mantener ambos sets dejaría dos vocabularios compitiendo por el
+mismo trabajo (`verify-reliability` contra `review-reliability`). Un archivo del usuario
+con el mismo nombre sobrevive.
+
+**6. Clase RDD nativa** — Cline es runtime con revisión por recibos: adaptador de
 transporte que invoca el CLI headless (`cline "<prompt>" --json --system <texto>
 --auto-approve false`) en un área de trabajo temporal y aislada —raíces de configuración,
 datos y home propias, sin herramientas—, que falla cerrado cuando no puede producir un
@@ -114,10 +122,10 @@ lenses y Judgment Day; stop hook; verbo de telemetría.
 | Archivo | Contenido |
 |---|---|
 | `internal/agents/cline/adapter.go` | Implementa `agents.Adapter` + `CapabilityManifest()` |
-| `internal/components/clineagents/` | Proyección de los agentes configurados de Cline + generador del orchestrator |
+| `internal/components/clineagents/` | Propiedad de los agentes configurados de Cline: retiro del set ODD superseded + generador del orchestrator |
 | `internal/components/agenthooks/cline_skill_registry.go` | Hook de skill-registry como archivo, con marca de propiedad |
 | `internal/reviewerprovider/cline_*.go` | Transporte de revisor headless, entorno aislado y parsing de salida |
-| `internal/assets/cline/agents/*.yaml` | Agentes de review lenses y Judgment Day en el esquema de Cline |
+| `internal/assets/cline/agents/*.yaml` | Agentes de review lenses y Judgment Day en el esquema de Cline (8 archivos) |
 | `internal/assets/cline/orchestrator.md` | Generado desde el asset canónico genérico |
 
 ### Modificados
@@ -156,15 +164,19 @@ apuntando a `sandbox/home` y con `sandbox/bin` primero en el PATH. El `~/.cline`
 - `gentle-ai doctor` en el sandbox — estado de Cline instalado y versión de assets
   coincidente.
 - Reporte del propio runtime (`cline config rules|skills|agents|mcp|hooks --json`): la
-  regla `gentle-ai`, las skills gestionadas, los agentes configurados y los dos servidores
-  MCP.
+  regla `gentle-ai`, las skills gestionadas, los ocho agentes de review y Judgment Day,
+  los cuatro hooks (mapeados a `prompt_submit`, `agent_start`, `tool_call` y `agent_end`)
+  y los dos servidores MCP.
+- La retirement verificada en vivo: los cinco verificadores ODD que la pasada anterior
+  había instalado desaparecen de `~/.cline/agents/` y quedan los ocho agentes de review.
 - Evidencia de aislamiento: `~/.cline` (362 entradas, 245 digests), `~/.gentle-ai`
   (40 entradas, 26 digests), el binario global de gentle-ai y el install global de Cline
   byte-idénticos antes y después.
 - Pruebas del CLI de Cline compiladas desde el workspace (`bun run build:sdk` con Bun
   1.3.13 de mise), no desde el install global.
 
-Detalle completo en `sandbox/evidence/sandbox-verification.md` (18 controles, 0 fallos).
+Detalle completo en `sandbox/evidence/sandbox-verification.md` (18 controles de la primera
+pasada más 7 de la re-verificación posterior a la clase RDD, 0 fallos).
 
 ### Fallo de test preexistente y ambiental (NO relacionado)
 
@@ -205,7 +217,10 @@ cline` instala las dependencias con el Bun de mise y compila el SDK.
 4. **El transporte RDD corre en un área temporal aislada.** El revisor ve la evidencia
    del candidato y nada más: sin reglas del usuario, sin reglas del proyecto, sin
    herramientas, sin escribir el `~/.cline` real.
-5. **El estado de Cline no es RDD por accidente.** `model.rdd.go` y el manifest se mueven
+5. **Un solo set de review por runtime.** El set ODD lead-invoked se retira con la
+   comprobación de propiedad, no se borra en seco: el archivo de un usuario con el mismo
+   nombre sobrevive.
+6. **El estado de Cline no es RDD por accidente.** `model.rdd.go` y el manifest se mueven
    juntos, porque un test de paridad lo exige: un runtime sin RDD no puede recibir
    lenguaje de review.
 
