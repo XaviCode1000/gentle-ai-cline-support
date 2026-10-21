@@ -25,6 +25,15 @@ y verbo de telemetría), el comando estable de Engram, el esquema de telemetría
 la decisión documentada sobre el overlay de permisos, y el teardown con backup. Todo
 probado contra un sandbox aislado: el `~/.cline` real queda byte a byte idéntico.
 
+**Verificación independiente:** un verificador independiente sobre el elemento de
+riesgo alto escalado (contratos que otros consumidores leen, y la frontera de seguridad
+que crea el transporte del revisor) encontró tres bloqueantes, ya corregidos: los dos
+contratos publicados no admitían el runtime Cline; el aislamiento del revisor dependía de
+que el binario respetara el `HOME` recibido, y un launcher que lo reemplaza entregaba al
+revisor los archivos de hook del usuario para ejecutar; y la ruta de upgrade dejaba al
+runtime sin lente, porque el instalador de review sólo reescribe bytes que le pertenecen
+y la retiro venía después.
+
 **Decisión de seguridad:** Cline no recibe overlay de permisos. Su único interruptor
 inyectable es el booleano global `toolAutoApprove`, que auto-aprueba toda llamada sin
 deny-list por ruta; gentle-ai no puede expresar la mitad "permisivo + deny de secretos"
@@ -216,7 +225,11 @@ cline` instala las dependencias con el Bun de mise y compila el SDK.
    un no-op explícito a quitarle al usuario la puerta de aprobación.
 4. **El transporte RDD corre en un área temporal aislada.** El revisor ve la evidencia
    del candidato y nada más: sin reglas del usuario, sin reglas del proyecto, sin
-   herramientas, sin escribir el `~/.cline` real.
+   herramientas, sin escribir el `~/.cline` real. El aislamiento no se afirma: el
+   transporte fija en el scratch todas las raíces que el runtime resuelve por entorno, y
+   rechaza un launcher que sobreescriba el entorno recibido, nombrando el archivo y la
+   variable, porque esa sobreescritura ocurre dentro del launcher y desde afuera no se
+   puede reparar.
 5. **Un solo set de review por runtime.** El set ODD lead-invoked se retira con la
    comprobación de propiedad, no se borra en seco: el archivo de un usuario con el mismo
    nombre sobrevive.
@@ -231,6 +244,13 @@ cline` instala las dependencias con el Bun de mise y compila el SDK.
 - **La revisión nativa de Cline no se ha ejecutado en vivo.** El transporte está
   construido, aislado y probado por contrato, pero una sesión real de revisión con
   Cline necesita una credencial del provider y no se ejecutó en este entorno.
+- **La revisión nativa del cambio acumulado no corrió.** La assessment devolvió riesgo
+  alto con `reviewDue` y el START nativo se detuvo de forma terminal con
+  `lens_context_budget_exceeded`: la evidencia del revisor para el candidato completo
+  (86 rutas, 4371 líneas) excede el presupuesto de contexto del proveedor, así que no
+  se creó autoridad de revisión. La continuación del propio stop pide revisar el cambio
+  como candidatos más pequeños, que es la forma de slices encadenados que esta rama ya
+  tiene (19 commits de unidad de trabajo).
 - **`--auto-approve false` es la frontera de herramientas en modo no interactivo.** Si
   una versión futura de Cline cambiara ese comportamiento por defecto, el revisor
   podría alcanzar herramientas; el área temporal aislada sigue siendo la barrera.
