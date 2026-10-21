@@ -98,6 +98,11 @@ var clineScrubbedEnvironment = []string{
 	"CLINE_GLOBAL_SETTINGS_PATH",
 	"CLINE_MCP_SETTINGS_PATH",
 	"CLINE_CONNECTOR_SETTINGS_PATH",
+	"CLINE_CONNECTORS_DB_PATH",
+	"CLINE_CRON_DB_PATH",
+	"CLINE_TASKS_DB_PATH",
+	"CLINE_TOOL_APPROVAL_MODE",
+	"CLINE_TOOL_APPROVAL_DIR",
 }
 
 // Review runs the Cline CLI in an isolated scratch area and returns the
@@ -110,6 +115,12 @@ func (adapter *ClineAdapter) Review(ctx context.Context, invocation Invocation) 
 	binary, err := lookPath("cline")
 	if err != nil {
 		return nil, fmt.Errorf("cline reviewer transport unavailable: %w", err)
+	}
+	// A launcher that replaces the isolated environment would hand the
+	// reviewer the user's own hook files to execute. The transport refuses
+	// that launcher instead of claiming an isolation it cannot keep.
+	if err := checkClineLauncherIsolation(binary); err != nil {
+		return nil, err
 	}
 
 	scratchDir := adapter.scratchDir
@@ -154,7 +165,7 @@ func (adapter *ClineAdapter) Review(ctx context.Context, invocation Invocation) 
 	prompt := string(invocation.Prompt())
 	command := commandContext(ctx, binary, append([]string{prompt}, arguments...)...)
 	command.Dir = workDir
-	command.Env = clineChildEnvironment(homeDir)
+	command.Env = clineChildEnvironment(homeDir, configDir, dataDir)
 	// The prompt travels as the positional argument, so stdin stays empty and
 	// the runtime never waits for piped input.
 	command.Stdin = strings.NewReader("")
