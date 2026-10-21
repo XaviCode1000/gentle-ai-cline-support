@@ -1,4 +1,3 @@
-<!-- section:model-capable -->
 # Cline — Orchestrator Instructions
 
 Bind this to the Cline orchestrator rule only. Do NOT apply it to delegated workers.
@@ -112,18 +111,18 @@ Use the platform's native bounded worker for delegated-direct work.
 
 Keep each delegated writer bounded, with a short synthesized handoff. Delegation is mandatory only when a mechanism's own trigger fires.
 
-#### Mandatory Delegation Triggers
+#### Delegation Triggers
 
-These are parent-orchestrator routing boundaries. Use the smallest useful topology and keep the safety machinery behind the outcome-first interaction. Do not pass these rules to child agents as permission to orchestrate.
+These are parent-orchestrator routing boundaries. Each trigger holds only when its condition truly holds, and only then is it mandatory; no trigger holds by default, and when in doubt work inline. Use the smallest useful topology and keep the safety machinery behind the outcome-first interaction. Do not pass these rules to child agents as permission to orchestrate.
 
 1. **Evidence budget rule**: decide or verify inline with one parallel batch, at most 3 calls and approximately 10k tokens. Use bounded search/line ranges, not whole large files.
 2. **Mapping rule**: understanding that needs more evidence or more than approximately 5 sequential lookups requires one read-only explorer; with its handoff, re-evaluate task size. Return at most approximately 2k tokens with path:line evidence and one parent spot check. Do not reread the entire mapped evidence.
    - Keep parent bash output bounded to counts, --stat, tail, or summaries. On a large task, delegate long suites and builds; return concise observed results, including failures.
    - The approximately 150k parent-context backstop is advisory guidance, not mechanically observed or enforced. Pause and delegate the next bounded unit; do not claim runtime telemetry or enforcement.
-3. **Write rule**: a small task's writes stay inline, even across files; delegate a writer only for a named reason: parallel units launched together (two or more independent units with disjoint edit surfaces, each clearly heavier than starting a subagent) or the context backstop. Never for size, a large task alone, file count, or a price ratio; without a reason the parent writes inline, following its logbook. File count never fires this rule.
+3. **Write rule**: a small task's writes stay inline, even across files; delegate a writer only for a named reason: parallel units launched together (two or more independent units of behavior with disjoint edit surfaces, each needing several minutes of work: several files or roughly 100+ changed lines, because a subagent spends one to two minutes reading before it writes) or the context backstop. A unit is one independent piece of behavior with its code, tests, and docs together: never split one behavior into test, docs, and code writers, and a delivery that depends on another is not independent; several small independent changes run inline, one after another. Never for size, a large task alone, file count, or a price ratio; without a reason the parent writes inline, following its logbook. File count never fires this rule.
 4. **Context rule**: when the Write rule delegates a write, delegate reading that prepares a write together with it, plus broad research/context compression; an inline write reads inline, and never explore files you will read anyway before writing inline.
 5. **Per-action rule**: tests, builds, installs, and native checking actors may use fresh workers without changing the implementation route.
-6. **Verification rule**: a high-risk change (Task Size list) gets an independent verifier after the change's own checks; otherwise the change's own focused test and suite run inline.
+6. **Verification rule**: only a change that names a Task Size high-risk item gets an independent verifier after the change's own checks, as rarely as possible; a native tier, an unclear or failed assessment, and the writer's model or effort never add one by themselves; otherwise the change's own focused test and suite run inline.
 
 #### Delegated Verification Gate (MANDATORY)
 
@@ -154,28 +153,8 @@ Runtime-specific lifecycle content is dynamically injected only when the compile
 
 {{GENTLE_AI_ODD_SECTION:Orchestrator Routing and Delivery}}
 
-<!-- /section:model-capable -->
 
-<!-- section:model-small -->
-# Agent Teams Lite — Orchestrator Instructions (Small Model)
 
-You work inline by default, following your logbook. Keep responses short and structured. Delegate work to general sub-agents only when a mechanism's own trigger fires: understanding exceeds the inline batch budget or needs sequential exploration, a unit has a writer reason (parallel units launched together, or the context backstop), or the change is high risk. Small tasks run inline, including their focused test and suite.
-
-Quick delegation rules:
-
-1. Read to decide/verify: one parallel batch, at most 3 calls and approximately 10k tokens using bounded search/line ranges. Understanding that needs more evidence or more than approximately 5 sequential lookups -> one read-only explorer with an approximately 2k-token path:line handoff and one parent spot check.
-2. Delegate a writer only for a named reason (parallel units launched together, or the context backstop); otherwise write inline, following the logbook. File count never fires this.
-3. Keep one writer per unit; follow the applicable test-first policy and runner from `## Implementation Routing`: write one RED test per requested rule, add one test per touched existing command or option proving its previous behavior still holds, and add no other cases. Record observed checks, not assumed results.
-4. Verify delegated work by this gate, including its verification timing, correction bounds, and verify handoff:
-
-{{GENTLE_AI_ODD_SECTION:Delegated Verification Gate (MANDATORY)}}
-
-Model hints:
-
-- If your assigned model tier is `small`, load only up to 3 relevant `SKILL.md` paths and prefer numbered step instructions instead of long paragraphs.
-
-When delegating to sub-agents, pass `## Skills to load before work` followed by exact `SKILL.md` paths. Sub-agents that can reach Engram must `mem_save` important discoveries before returning; Cline `spawn_agent` delegates have no MCP, so they return a full result payload including Key Learnings and the lead or orchestrator persists it from the parent session.
-<!-- /section:model-small -->
 
 ### Sub-Agent Launch Deduplication (MANDATORY)
 
@@ -226,7 +205,7 @@ Sub-agents get a fresh context with NO memory. The orchestrator controls context
 
 - Read context: orchestrator searches engram (`mem_search`) for relevant prior context and passes it in the sub-agent prompt. Sub-agent does NOT search engram itself.
 - Write context: where the delegate can reach Engram (OpenCode/Claude/Codex agents), the sub-agent MUST save significant discoveries, decisions, or bug fixes via `mem_save` before returning. Cline `spawn_agent` delegates have no MCP access, so they instead return the full result payload including Key Learnings, and the lead or orchestrator persists those findings from the parent session.
-- Cline delegation prompt addition: `"When you find important discoveries, decisions, or bug fixes, include them, including any Key Learnings, in your result payload so the lead can persist them to engram from this session."` On runtimes with Engram access use: `"If you make important discoveries, decisions, or fix bugs, save them to engram via mem_save with project: '{project}'."`
+- Cline delegation prompt addition: `"When you find important discoveries, decisions, or fix bugs, include them, including any Key Learnings, in your result payload so the lead can persist them to engram from this session."` On runtimes with Engram access use: `"If you make important discoveries, decisions, or fix bugs, save them to engram via mem_save with project: '{project}'."`
 - Skills: orchestrator resolves matching paths from the registry and injects them as `## Skills to load before work` in the sub-agent prompt. Sub-agents read those exact `SKILL.md` files before work.
 
 Forward the applicable test-first policy and runner from `## Implementation Routing` to implementation workers. When that policy applies, require observed RED → GREEN → REFACTOR. For ODD recovery, read the full project-scoped Engram observation and the feature task document before resuming; do not treat a search preview as full context.

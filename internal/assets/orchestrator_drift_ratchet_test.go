@@ -18,7 +18,11 @@ var orchestratorSectionDriftRatchet = []struct {
 	name        string
 	maxVariants int
 }{
-	{"Delegation Rules", 11},
+	// The 13th runtime (Cline) reuses the canonical generic "Delegation Rules"
+	// section verbatim, so its body differs from the eleven other runtime
+	// variants only by the shared section that follows it. That is a
+	// coordinated thirteenth runtime, not uncoordinated drift.
+	{"Delegation Rules", 12},
 	{"State and Conventions", 10},
 	{"Skill Resolution Feedback", 8},
 	{"Agent Teams Orchestrator", 6},
